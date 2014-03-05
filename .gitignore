@@ -34,3 +34,7 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Video files
+.mp4
+.avi
