@@ -13,7 +13,7 @@ from matplotlib.pyplot import *
 
 
 
-inputFile = "Sequences/eye1.avi"
+inputFile = "Sequences/eye8.avi"
 outputFile = "eyeTrackerResult.mp4"
 
 #--------------------------
@@ -39,8 +39,15 @@ def GetPupil(gray,thr):
 	#Calculate blobs
 	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	pupils = [];
-	# YOUR IMPLEMENTATION HERE !!!!
-
+	# YOUR IMPLEMENTATION HERE !!!
+	for con in contours:
+		if len(con) >= 5:
+			p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
+			if (1.2 > p["BoundingBox"][2] / p["BoundingBox"][3] > 0.8) \
+			and p["Extend"] > getSliderVals()["extendRatio"]:
+				pupils.append(cv2.fitEllipse(con))
+		
+	
 	return pupils
 
 def GetGlints(gray,thr):
@@ -130,14 +137,14 @@ def update(I):
 		step=18
 		cv2.putText(img, "pupilThr :"+str(sliderVals['pupilThr']), (x, y+step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
 		cv2.putText(img, "glintThr :"+str(sliderVals['glintThr']), (x, y+2*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
-	cv2.imshow('Result',img)
+	
 
 		#Uncomment these lines as your methods start to work to display the result in the
 		#original image
-		# for pupil in pupils:
+	for pupil in pupils:
 		#         cv2.ellipse(img,pupil,(0,255,0),1)
-		#         C = int(pupil[0][0]),int(pupil[0][1])
-		#         cv2.circle(img,C, 2, (0,0,255),4)
+		C = int(pupil[0][0]),int(pupil[0][1])
+		cv2.circle(img,C, 2, (0,0,255),4)
 		#     for glint in glints:
 		#         C = int(glint[0]),int(glint[1])
 		#         cv2.circle(img,C, 2,(255,0,255),5)
@@ -147,6 +154,7 @@ def update(I):
 		#circularHough(gray)
 
 	#copy the image so that the result image (img) can be saved in the movie
+	cv2.imshow('Result',img)
 	drawImg = img.copy()
 
 
@@ -342,6 +350,7 @@ def setupWindowSliders():
 	#define the minimum and maximum areas of the pupil
 	cv2.createTrackbar('minSize','Threshold', 20, 200, onSlidersChange)
 	cv2.createTrackbar('maxSize','Threshold', 200,200, onSlidersChange)
+	cv2.createTrackbar('extendRatio','Threshold', 0,100, onSlidersChange)
 	#Value to indicate whether to run or pause the video
 	cv2.createTrackbar('Stop/Start','Threshold', 0,1, onSlidersChange)
 
@@ -352,6 +361,7 @@ def getSliderVals():
 	sliderVals['glintThr'] = cv2.getTrackbarPos('glintThr', 'Threshold')
 	sliderVals['minSize'] = 50*cv2.getTrackbarPos('minSize', 'Threshold')
 	sliderVals['maxSize'] = 50*cv2.getTrackbarPos('maxSize', 'Threshold')
+	sliderVals['extendRatio'] = 0.01*cv2.getTrackbarPos('extendRatio', 'Threshold')
 	sliderVals['Running'] = 1==cv2.getTrackbarPos('Stop/Start', 'Threshold')
 	return sliderVals
 
