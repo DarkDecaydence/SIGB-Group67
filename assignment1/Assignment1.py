@@ -43,8 +43,8 @@ def GetPupil(gray,thr):
 	for con in contours:
 		if len(con) >= 5:
 			p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
-			if (1.2 > p["BoundingBox"][2] / p["BoundingBox"][3] > 0.8) \
-			and p["Extend"] > getSliderVals()["extendRatio"]:
+			if 400 < p["Area"] < 6000 \
+			and p["Extend"] > 0.5:
 				pupils.append(cv2.fitEllipse(con))
 		
 	
@@ -117,6 +117,7 @@ def update(I):
 	img = I.copy()
 	sliderVals = getSliderVals()
 	gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+	gray = cv2.equalizeHist(gray)
 	# Do the magic
 	pupils = GetPupil(gray,sliderVals['pupilThr'])
 	glints = GetGlints(gray,sliderVals['glintThr'])
@@ -142,7 +143,7 @@ def update(I):
 		#Uncomment these lines as your methods start to work to display the result in the
 		#original image
 	for pupil in pupils:
-		#         cv2.ellipse(img,pupil,(0,255,0),1)
+		cv2.ellipse(img,pupil,(0,255,0),1)
 		C = int(pupil[0][0]),int(pupil[0][1])
 		cv2.circle(img,C, 2, (0,0,255),4)
 		#     for glint in glints:
@@ -344,7 +345,7 @@ def setupWindowSliders():
 	cv2.namedWindow('Threshold')
 	cv2.namedWindow("TempResults")
 	#Threshold value for the pupil intensity
-	cv2.createTrackbar('pupilThr','Threshold', 90, 255, onSlidersChange)
+	cv2.createTrackbar('pupilThr','Threshold', 40, 255, onSlidersChange)
 	#Threshold value for the glint intensities
 	cv2.createTrackbar('glintThr','Threshold', 240, 255,onSlidersChange)
 	#define the minimum and maximum areas of the pupil
