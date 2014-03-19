@@ -14,7 +14,7 @@ from matplotlib.pyplot import *
 
 
 
-inputFile = "Sequences/eye9.avi"
+inputFile = "Sequences/eye1.avi"
 outputFile = "eyeTrackerResult.mp4"
 
 #--------------------------
@@ -76,7 +76,7 @@ def GetGlints(gray,thr, maxSize):
 	#binI = cv2.dilate(binI, kernel, iterations = 1)
 	#binI = cv2.erode(binI, kernel, iterations = 1)
 	
-	cv2.imshow("Threshold",binI)
+	#cv2.imshow("Threshold",binI)
 	#Calculate blobs
 	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	glints = [];
@@ -87,11 +87,26 @@ def GetGlints(gray,thr, maxSize):
 			glints.append(p['Centroid'])
 	return glints
 
-def GetIrisUsingThreshold(gray,pupil):
+def GetIrisUsingThreshold(gray, thr):
 	''' Given a gray level image, gray and threshold
 	value return a list of iris locations'''
-	# YOUR IMPLEMENTATION HERE !!!!
-	pass
+
+	props = RegionProps()
+	val,binI = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY_INV)
+	
+	cv2.imshow("Threshold",binI)
+	#Calculate blobs
+	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+	iris = [];
+	for con in contours:
+		if len(con) >= 5:
+			p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
+			if 200 < p["Area"] \
+			and p["Extend"] > 0.3:
+				iris.append(cv2.fitEllipse(con))
+		
+	
+	return iris
 
 def circularHough(gray):
 	''' Performs a circular hough transform of the image, gray and shows the  detected circles
@@ -160,6 +175,7 @@ def update(I):
 	pupils = GetPupil(gray,sliderVals['pupilThr'],sliderVals['minSize'],sliderVals['maxSize'])
 	glints = GetGlints(gray,sliderVals['glintThr'],sliderVals['glinsMax'])
 	FilterPupilGlint(pupils,glints, sliderVals["glinsDistance"])
+	iris = GetIrisUsingThreshold(gray, sliderVals["irisThr"])
 
 	#Do template matching
 	global leftTemplate
@@ -191,13 +207,16 @@ def update(I):
 		cv2.circle(img, C, 2,(255, 0, 255),2)
      	#cv2.imshow("Result", img)
 
-		#For Iris detection - Week 2
+	for ir in iris:
+		cv2.ellipse(img,ir,(255,255,0),1)
 		#circularHough(gray)
 
 	#copy the image so that the result image (img) can be saved in the movie
 	
 		cv2.imshow('Result',img)
 	drawImg = img.copy()
+	
+	#detectPupilKMeans(gray, K=sliderVals['distWeight'], distanceWeight=2)
 
 
 def printUsage():
@@ -340,7 +359,24 @@ def detectPupilKMeans(gray,K=2,distanceWeight=2,reSize=(40,40)):
 	#use the found clusters to map
 	label,distance = vq(features,centroids)
 	# re-create image from
-	labelIm = np.array(np.reshape(label,(M,N)))
+	labelIm = np.uint8(np.array(np.reshape(label,(M,N))))
+	
+	props = RegionProps()
+	val,binI = cv2.threshold(labelIm, 2, 255, cv2.THRESH_BINARY_INV)
+	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+	pupils = [];
+	# YOUR IMPLEMENTATION HERE !!!
+	for con in contours:
+		p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
+		if len(con > 5):
+			pupils.append(con)
+	
+	labelIm = np.zeros((M, N))
+	
+	for pupil in pupils:
+		for p in pupil:
+			labelIm[p[0][0]][p[0][1]] = 1
+	
 	f = figure(1)
 	imshow(labelIm)
 	f.canvas.draw()
@@ -390,6 +426,7 @@ def setupWindowSliders():
 	#Threshold value for the glint intensities
 	cv2.createTrackbar('glintThr','Threshold', 245, 255,onSlidersChange)
 	#define the minimum and maximum areas of the pupil
+	cv2.createTrackbar('irisThr','Threshold', 128,255, onSlidersChange)
 	cv2.createTrackbar('minSize','Threshold', 500, 5000, onSlidersChange)
 	cv2.createTrackbar('maxSize','Threshold', 3000, 5000, onSlidersChange)
 	cv2.createTrackbar('glinsMax','Threshold', 20,100, onSlidersChange)
@@ -406,6 +443,7 @@ def getSliderVals():
 	sliderVals['maxSize'] = cv2.getTrackbarPos('maxSize', 'Threshold')
 	sliderVals['glinsMax'] = cv2.getTrackbarPos('glinsMax', 'Threshold')
 	sliderVals['glinsDistance'] = cv2.getTrackbarPos('glinsDistance', 'Threshold')
+	sliderVals['irisThr'] = cv2.getTrackbarPos('irisThr', 'Threshold')
 	sliderVals['Running'] = 1==cv2.getTrackbarPos('Stop/Start', 'Threshold')
 	return sliderVals
 
