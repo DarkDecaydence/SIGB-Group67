@@ -43,6 +43,7 @@ def GetPupil(gray,thr, minSize, maxSize):
 	props = RegionProps()
 	val,binI = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY_INV)
 	
+	# Custom Morphology --
 	kernel = np.ones((10, 10), np.uint8)
 	binI = cv2.dilate(binI, kernel, iterations = 1)
 	binI = cv2.erode(binI, kernel, iterations = 1)
@@ -67,7 +68,7 @@ def GetGlints(gray,thr, maxSize):
 	value return a list of glint locations'''
 	# YOUR IMPLEMENTATION HERE !!!!
 	tempResultImg = cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR) #used to draw temporary results
-
+	
 	props = RegionProps()
 	val,binI = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY)
 	cv2.imshow("TempResults",tempResultImg)

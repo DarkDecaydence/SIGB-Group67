@@ -38,3 +38,9 @@ nosetests.xml
 # Video files
 .mp4
 .avi
+
+# LaTeX files
+.aux
+.log
+.pdf
+.synctex.gz
