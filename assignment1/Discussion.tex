@@ -1,0 +1,48 @@
+\section{Discussion}
+
+In this chapter the results of the algorithm when applied to the dataset related to the assignment. 
+
+\subsection{Pupil}
+The algorithm we have constructed shows very nice results when tracking the pupil. With a proper threshold defined, in almost every image in every sequence we have been given we have been able to identify the pupil and isolate it so it is the only candidate. The pupil-tracking's deficiencies are mainly concerning defining a threshold for an entire image sequence. Given that different images require different thresholds to isolate the pupil from its surroundings, it only makes sense that for a sequence containing changing conditions will not be possible to define a single threshold for the entire sequence. We have not been able to implement automatic definition of thresholds.\\
+The following videos demonstrate the algorithms pupil tracking capabilities. For each sequence a threshold has been selected that gives optimal results. In the filtering process the minimum area for a pupil component is 500, and the maximum is 4800.\\
+The numbers in the file names refers to the example recording processed in each video, and not to any ordering of the results.
+\begin{itemize}
+	\item[Pupil1\_good.avi] This recording shows the algorithm operate in near-perfect conditions. The pupil is large and clearly identifiable, and the algorithm finds it consistently. Very few mistakes are made, but a few components are falsely identified as pupils. \\Threshold is 15.
+	\item[Pupil9\_light.avi] Here we see how even extreme lighting conditions are analysed correctly, as long as they are consistent throughout the recording. We attribute this to the histogram equalization performed before processing; this ensures that the pupil, being the darkest object in the video, is rendered as nearly entirely black in the image being processed regardless of lighting. Here the conditions are so extreme that a very low threshold can be defined.\\Threshold is 3.
+	\item[Pupil12\_ellipsis.avi] Here we see how the ellipsis-fitting algorithm employed to simplify the representation of the pupil component manages to follow the shape of the actual pupil very exactly under good conditions.\\Threshold is 15.
+	\item[Pupil4\_negatives.avi] In this recording the pupil is not identified in certain sections (false negatives), due to it being too bright and the threshold too low to capture it.\\Threshold is 10
+	\item[Pupil4\_positives.avi] This shows the same recording as the previous, but with a slightly higher threshold. Here we see how the pupil is now being consistently tracked, but a great number of false positives are being captured around darker areas. This demonstrates how some videos will have conditions too differing to define a single threshold for them.\\Threshold is 18.
+	\item[Pupil5\_bright.avi] In this recording the person leans forwards towards the light source, and the pupil is overly lit for a short duration. The threshold has been set so that it correctly identifies the pupil for a short duration before and after the extreme condition. The threshold is thus correct for a narrow section of lighting conditions, and the inability to locate the pupil before, during and after the leaning shows once again that changing conditions does not allow for a static threshold to be defined, even if it can for individual frames.\\Threshold is 100.
+	\item[Pupil8\_dark.avi] Here we see the opposite problem of the previous recording. Here, a large section of the recording becomes very dark towards the end, and the algorithm is unable to find the pupil. Part of the blame for this problem is on the histogram equalization process, which reduces contrast between the pupil and iris in response to large, dark areas.\\Threshold is 40.
+	\item[PupilBizaro\_decent.avi] This recording shows the "Bizaro"-video, being the hardest challenge in the provided dataset, and shows decent results in pupil tracking. The pupil is found during the average lighting conditions in the recording, but once again fails when the conditions shift.\\Threshold is 5.
+\end{itemize}
+
+From these results we conclude that our algorithm can identify the pupil in almost any image, given the optimal threshold, but that changing conditions throughout a video can ensure that no single threshold works for the entire video.
+
+\subsection{Glints}
+The algorithm is very capable of locating glints the recordings, given that the pupil is correctly identified, which as we have demonstrated, is generally the case. The results have been similar to the pupil identification, although the glints have tended to be easier to identify under a range of conditions with the single threshold of 245. The main concern have therefore been elimination of false positives, while retaining the true glints. It has in many cases been necessary to select a proper upper bound on the glint area in the individual recordings, much in the same manner as the threshold in the pupil detection.\\
+The following recordings demonstrate our results. The minimum distance from a pupil is set to 50 in all examples.
+
+\begin{itemize}
+	\item[glint3\_good.avi] Here we see our algorithm working under good conditions, with equal results. We see a lot of potential false positives in the numerous bright areas around the persons eye, but none of them are picked up on due to their high distance to the pupil.\\Max area is 50.
+	\item[glint4\_distance.avi] Here we observe false negatives when the true glints are too far removed from the pupil. Increasing the maximum distance would only cause false positives, so the problem is unsolved with our current solution. We also see how the glints are sometimes missed due to their changing size.\\Max area is 50.
+	\item[gline6\_positives.avi] Here we observe how false positives occur in the bright spots on the upper eyelid, when these move close enough to the pupil.\\Max area is 40.
+	\item[glint9\_positives.avi] In this recording we see clusters of false positives accompanying false positives in the pupil detection. This shows a weakness in relying as heavily as we do o finding the pupil in order to locate glints.\\Max area is 50.
+	\item[glint7\_dependency.avi] In this recording we see the opposite problem, where the glints are successfully found in all cases, except cases where the pupil is not identified. Under these conditions it is clear that the pupil tracking is the single point of failure for the glint tracking. This is not indicative of a robust system.
+\end{itemize}
+We conclude that the glint tracking works decently well, but only for cases where the pupil detection can be relied on to provide an indication of the position of the true glints.
+
+\subsection{Iris}
+
+Our iris detection is not working satisfactory. The edge detection algorithm employed does not locate the boundary of the iris sufficiently accurately to allow for proper iris detection.
+\begin{itemize}
+	\item[iris1\_failure.avi] This recording shows how the boundary of the iris is not properly tracked. The ellipsis indicating our results jumps around a lot, and does not follow the iris. The only reason the iris is tracked as well as it is, is that it follows the correctly identified pupil, and that we have set the radius of the circle along which the iris contour is searched for to match the radius of the iris.
+\end{itemize}
+As far as we can tell the problems arise in the decision that we are identifying the point of highest gradient along the circle normal. This approach is much too prone to noise; a noisy area where 2 adjacent pixels in a monotone area differ wildly will be chosen over a smooth but consistent edge. The fact that the boundary of the iris is not a hard edge between single pixels is reflected in the results, as the algorithm shows no sign of locating the edge. The algorithm proves prone to picking up the eyelashes as iris edges. This confirms our assumption, as the eyelash area contains many harder edges, and in this case is analogous to noise.
+
+
+iris1\_failure
+no tracking
+follows pupil
+
+speed

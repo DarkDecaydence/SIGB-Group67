@@ -16,8 +16,8 @@ from matplotlib.pyplot import *
 
 
 
-inputFile = "Sequences/eye1.avi"
-outputFile = "eyeTrackerResult.mp4"
+inputFile = "Sequences/EyeBizaro.avi"
+outputFile = "Sequences/PupilBizaro_decent.avi"
 
 #--------------------------
 #         Global variable
@@ -71,7 +71,7 @@ def GetPupil(gray,thr, minSize, maxSize):
 	binI = cv2.dilate(binI, kernel, iterations = 1)
 	binI = cv2.erode(binI, kernel, iterations = 1)
 	
-	#cv2.imshow("Threshold",binI)
+	cv2.imshow("Threshold",binI)
 	#Calculate blobs
 	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	pupils = [];
@@ -163,7 +163,7 @@ def GetIrisUsingNormals(img, gray, pupils, normalLength):
 	xIm, yIm, magIm, angleIm = getGradientImageInfo(gray)
 	iris = []
 	for ((pX, pY), pRad, pAng) in pupils:
-		P = getCircleSamples(center = (pX, pY), radius=130, nPoints=50)
+		P = getCircleSamples(center = (pX, pY), radius=120, nPoints=50)
 		irisPoints = []
 		for (xf, yf, dxf, dyf) in P:
 			maxGrad = 0
@@ -172,12 +172,10 @@ def GetIrisUsingNormals(img, gray, pupils, normalLength):
 			ix, iy, idx, idy = int(xf), int(yf), int(dxf * band), int(dyf * band)
 			angle = math.atan2(dyf, dxf)* (180 / math.pi)
 			maxX, maxY = magIm.shape
-			cv2.line(img, (ix - idx, iy - idy), (ix + idx, iy + idy), (255, 255, 0))
 			for (x, y) in getLineCoordinates((ix - idx, iy - idy), (ix + idx, iy + idy)):
 				if 0 < x < maxX and 0 < y < maxY and magIm[x][y] > maxGrad and math.fabs(angleIm[x][y] - angle) > 45:
 					maxGrad = magIm[x][y]
 					maxPoint = (x, y)
-			cv2.circle(img, maxPoint, 2, (255, 255, 0), 4)
 			if maxGrad > 0:
 				irisPoints.append(maxPoint)
 		iris.append(cv2.fitEllipse(np.array(irisPoints)))
@@ -217,7 +215,7 @@ def update(I):
 	pupils = GetPupil(gray,sliderVals['pupilThr'],sliderVals['minSize'],sliderVals['maxSize'])
 	glints = GetGlints(gray,sliderVals['glintThr'],sliderVals['glinsMax'])
 	FilterPupilGlint(pupils,glints, sliderVals["glinsDistance"])
-	iris = GetIrisUsingNormals(img, gray, pupils, sliderVals["irisThr"])
+	#iris = GetIrisUsingNormals(img, gray, pupils, sliderVals["irisThr"])
 
 	#Do template matching
 	global leftTemplate
@@ -247,7 +245,6 @@ def update(I):
 	for glint in glints:
 		C = int(glint[0]),int(glint[1])
 		cv2.circle(img, C, 2,(255, 0, 255),2)
-     	#cv2.imshow("Result", img)
 	
 	for ir in iris:
 		cv2.ellipse(img,ir,(255,255,0),1)
@@ -269,7 +266,7 @@ def printUsage():
 	print 's: toggle video  writing'
 	print 'c: close video sequence'
 
-def run(fileName,resultFile='eyeTrackingResults.avi'):
+def run(fileName,resultFile):
 
 	''' MAIN Method to load the image sequence and handle user inputs'''
 	global imgOrig, frameNr,drawImg
@@ -471,7 +468,7 @@ def setupWindowSliders():
 	cv2.createTrackbar('irisThr','Threshold', 128,255, onSlidersChange)
 	cv2.createTrackbar('minSize','Threshold', 500, 5000, onSlidersChange)
 	cv2.createTrackbar('maxSize','Threshold', 4800, 5000, onSlidersChange)
-	cv2.createTrackbar('glinsMax','Threshold', 20,100, onSlidersChange)
+	cv2.createTrackbar('glinsMax','Threshold', 20,150, onSlidersChange)
 	cv2.createTrackbar('glinsDistance','Threshold', 50,200, onSlidersChange)
 	#Value to indicate whether to run or pause the video
 	cv2.createTrackbar('Stop/Start','Threshold', 0,1, onSlidersChange)
@@ -500,4 +497,4 @@ def onSlidersChange(dummy=None):
 #--------------------------
 #         main
 #--------------------------
-run(inputFile)
+run(inputFile, outputFile)
