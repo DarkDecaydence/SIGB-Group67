@@ -1,4 +1,4 @@
-\subsection{Finding the pupil}
+\subsection{Finding the pupil with Thresholds}
 %TEXT
 To find the pupil, we have expanded on the \emph{GetPupil(...)} function.\newline
 By default, the GetPupil(...) function gathers all contours in the current image. Our assignment was to filter the contours, hopefully ending up with only the pupil.\newline
@@ -36,3 +36,8 @@ The morphing is done by dilating the binary image 10 pixels, and then eroding th
 \end{figure}
 
 While our efforts does help us reduce the number of potential candidates for the pupil, it is not flawless, and still finds multiple candidates. This is likely due to our premises not being capable of isolating the pupil. Yet, as seen in the figure, the premises and morphology does indeed find the pupil with a fair amount of certainty.
+\newline
+
+\subsection{Finding the pupil with Clustering}
+The next step after finding the pupil and glints based on thresholds and morphology was to use clustering to segment the image into the regions of interest. For this we used the k-means method based on intensity and position as feature vectors. Playing around with the position or \emph{distanceWeight} we found that changing this value does not give a significant improvement for the segmentation of the pupil. On the other hand, we found that a \emph{k} value of 5 gives a good separation of the pupil as one cluster for the \emph{eye1.avi} sequence, but because of the changes in intensity the same value does not apply for all the sequences.  
+(TO-DO 7-10 pupil detection using clustering)
