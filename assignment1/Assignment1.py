@@ -6,6 +6,8 @@ from SIGBTools import RegionProps
 from SIGBTools import getLineCoordinates
 from SIGBTools import ROISelector
 from SIGBTools import getImageSequence
+from SIGBTools import getCircleSamples
+from SIGBTools import getLineCoordinates
 import numpy as np
 import sys
 from scipy.cluster.vq import *
@@ -34,6 +36,27 @@ def eucledianDistance(point1, point2):
 	x = x**2
 	y = y**2
 	return math.sqrt(x+y)
+
+def getGradientImageInfo(gray):
+	xIm = cv2.Sobel(gray, -1, 1, 0)
+	yIm = cv2.Sobel(gray, -1, 0, 1)
+	#xIm, yIm = np.gradient(gray)
+	m, n = gray.shape
+	angleIm =  np.array([[0] * n] * m)
+	magIm = np.array([[0] * n] * m)
+	for x in range(m):
+		for y in range(n):
+			angleIm[x][y] = math.atan2(yIm[x][y], xIm[x][y]) * (180 / math.pi)
+			magIm[x][y] = math.sqrt(xIm[x][y] ** 2 + yIm[x][y] ** 2)
+	return (xIm, yIm, magIm, angleIm)
+
+def circleTest(img, center, radius, samples):
+	P = getCircleSamples(center=center, radius=radius, nPoints=samples)
+	t = 0
+	for (xf,yf,dxf,dyf) in P:
+		x, y, dx, dy = int(xf), int(yf), int(dxf * radius), int(dyf * radius)
+		cv2.circle(img,(x, y), 2, (0,255,0), 4)
+		cv2.line(img, (x - dx, y - dy), (x + dx, y + dy), (0,255,0))
 
 def GetPupil(gray,thr, minSize, maxSize):
 	'''Given a gray level image, gray and threshold value return a list of pupil locations'''
@@ -136,11 +159,29 @@ def circularHough(gray):
 	 cv2.circle(gColor, (int(c[0]),int(c[1])),c[2], (0,0,255),5)
 	 cv2.imshow("hough",gColor)
 
-def GetIrisUsingNormals(gray,pupil,normalLength):
-	''' Given a gray level image, gray and the length of the normals, normalLength
-	 return a list of iris locations'''
-	# YOUR IMPLEMENTATION HERE !!!!
-	pass
+def GetIrisUsingNormals(img, gray, pupils, normalLength):
+	xIm, yIm, magIm, angleIm = getGradientImageInfo(gray)
+	iris = []
+	for ((pX, pY), pRad, pAng) in pupils:
+		P = getCircleSamples(center = (pX, pY), radius=130, nPoints=50)
+		irisPoints = []
+		for (xf, yf, dxf, dyf) in P:
+			maxGrad = 0
+			maxPoint = (-1, -1)
+			band = 40
+			ix, iy, idx, idy = int(xf), int(yf), int(dxf * band), int(dyf * band)
+			angle = math.atan2(dyf, dxf)* (180 / math.pi)
+			maxX, maxY = magIm.shape
+			cv2.line(img, (ix - idx, iy - idy), (ix + idx, iy + idy), (255, 255, 0))
+			for (x, y) in getLineCoordinates((ix - idx, iy - idy), (ix + idx, iy + idy)):
+				if 0 < x < maxX and 0 < y < maxY and magIm[x][y] > maxGrad and math.fabs(angleIm[x][y] - angle) > 45:
+					maxGrad = magIm[x][y]
+					maxPoint = (x, y)
+			cv2.circle(img, maxPoint, 2, (255, 255, 0), 4)
+			if maxGrad > 0:
+				irisPoints.append(maxPoint)
+		iris.append(cv2.fitEllipse(np.array(irisPoints)))
+	return iris
 
 def GetIrisUsingSimplifyedHough(gray,pupil):
 	''' Given a gray level image, gray
@@ -172,11 +213,11 @@ def update(I):
 	sliderVals = getSliderVals()
 	gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
 	gray = cv2.equalizeHist(gray)
-	# Do the magic
+	
 	pupils = GetPupil(gray,sliderVals['pupilThr'],sliderVals['minSize'],sliderVals['maxSize'])
 	glints = GetGlints(gray,sliderVals['glintThr'],sliderVals['glinsMax'])
 	FilterPupilGlint(pupils,glints, sliderVals["glinsDistance"])
-	iris = GetIrisUsingThreshold(gray, sliderVals["irisThr"])
+	iris = GetIrisUsingNormals(img, gray, pupils, sliderVals["irisThr"])
 
 	#Do template matching
 	global leftTemplate
@@ -207,14 +248,14 @@ def update(I):
 		C = int(glint[0]),int(glint[1])
 		cv2.circle(img, C, 2,(255, 0, 255),2)
      	#cv2.imshow("Result", img)
-
+	
 	for ir in iris:
 		cv2.ellipse(img,ir,(255,255,0),1)
 		#circularHough(gray)
 
 	#copy the image so that the result image (img) can be saved in the movie
 	
-		cv2.imshow('Result',img)
+	cv2.imshow('Result',img)
 	drawImg = img.copy()
 	
 	#detectPupilKMeans(gray, K=sliderVals['distWeight'], distanceWeight=2)
@@ -423,13 +464,13 @@ def setupWindowSliders():
 	cv2.namedWindow('Threshold')
 	cv2.namedWindow("TempResults")
 	#Threshold value for the pupil intensity
-	cv2.createTrackbar('pupilThr','Threshold', 35, 255, onSlidersChange)
+	cv2.createTrackbar('pupilThr','Threshold', 15, 255, onSlidersChange)
 	#Threshold value for the glint intensities
 	cv2.createTrackbar('glintThr','Threshold', 245, 255,onSlidersChange)
 	#define the minimum and maximum areas of the pupil
 	cv2.createTrackbar('irisThr','Threshold', 128,255, onSlidersChange)
 	cv2.createTrackbar('minSize','Threshold', 500, 5000, onSlidersChange)
-	cv2.createTrackbar('maxSize','Threshold', 3000, 5000, onSlidersChange)
+	cv2.createTrackbar('maxSize','Threshold', 4800, 5000, onSlidersChange)
 	cv2.createTrackbar('glinsMax','Threshold', 20,100, onSlidersChange)
 	cv2.createTrackbar('glinsDistance','Threshold', 50,200, onSlidersChange)
 	#Value to indicate whether to run or pause the video
