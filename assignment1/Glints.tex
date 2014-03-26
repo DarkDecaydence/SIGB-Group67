@@ -1,6 +1,8 @@
 \subsection{Finding the glints}
 To find the glints, we have applied the same techniques as used to find the pupil.\newline
 
-The main difference is that we have not used morphology when finding the glints, due to the use of an open/close operation when finding the pupil. Using another open/close operation to isolate the glints would be completely redundant.\newline
+The main difference is that we have not used morphology when finding the glints, due to the fact that using an open/close operation on the binary image will always tend to remove finer detail, and when looking for the glints fine detail is exactly what we are searching for. When applying an open-operation we found that the glints tended to disappear, while a close-operation tended to fuse them together.\newline
 
-In addition, we use only one filter when finding the glints; an area filter. Since our pupil tracking morphology has already removed many potential candidates by removing most minor contours, we have a small maxSize to search for, trying to find the glints.
+In addition, we use only one filter when finding the glints; an area filter. Since our pupil tracking morphology has already removed many potential candidates by removing most minor contours, we only put an upper bound on the area og the candidates.
+
+We employ a filtering process wherein the glint candidates must be located within a certain distance of a pupil candidate in order to be considered. This allowed us to relax the constraints on the candidates a bit, as this measure proved enough to remove most false candidates by itself.
