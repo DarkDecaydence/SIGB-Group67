@@ -1,4 +1,4 @@
-\subsection{Finding the glints}
+\subsection{Finding the glints with Thresholds}
 To find the glints, we have applied the same techniques as used to find the pupil.\newline
 
 The main difference is that we have not used morphology when finding the glints, due to the fact that using an open/close operation on the binary image will always tend to remove finer detail, and when looking for the glints fine detail is exactly what we are searching for. When applying an open-operation we found that the glints tended to disappear, while a close-operation tended to fuse them together.\newline
