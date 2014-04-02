@@ -1,12 +1,14 @@
 #from scipy import ndimage
 import cv2
+import cv
 import numpy as np
 from pylab import *
 from matplotlib import *
 from matplotlib.pyplot import *
 from scipy import *
 import math
-import SIGBTools
+from SIGBTools import *
+import sys
 def frameTrackingData2BoxData(data):
     #Convert a row of points into tuple of points for each rectangle
     pts= [ (int(data[i]),int(data[i+1])) for i in range(0,11,2) ]
@@ -31,9 +33,9 @@ def simpleTextureMap():
     cv2.imshow("Overlayed Image",M)
     cv2.waitKey(0)
 
-def showImageandPlot(N):
+def showImageAndPlot():
     #A simple attenmpt to get mouse inputs and display images using matplotlib
-    I = cv2.imread('groundfloor.bmp')
+    I = cv2.imread('Images/groundfloor.bmp')
     drawI = I.copy()
     #make figure and two subplots
     fig = figure(1) 
@@ -109,23 +111,68 @@ def showFloorTrackingData():
     #Load videodata
     fn = "GroundFloorData/sunclipds.avi"
     cap = cv2.VideoCapture(fn)
-    
+	
     #load Tracking data
     running, imgOrig = cap.read()
     dataFile = np.loadtxt('GroundFloorData/trackingdata.dat')
     m,n = dataFile.shape
+	
+    ituMap = cv2.imread("Images/ITUMap.bmp")
+    
+    Hgm, _ = getHomographyFromMouse(imgOrig, ituMap)
     
     fig = figure()
+    path = []
+    h1, w1 = imgOrig.shape[:2]
+    h2, w2 = ituMap.shape[:2]
+    videoSize = (h1 + h2, max(w1, w2), 3)
+    
+    videoWriter = cv2.VideoWriter("GroundFloorData/tracking.avi", cv.CV_FOURCC('D','I','V','3'), 15.0,(videoSize[1],videoSize[0]),True)
+    
     for k in range(m):
-        running, imgOrig = cap.read() 
+        if k % 50 == 0:
+            key = cv2.waitKey(0)
+            if key == 100:
+                sys.exit(0)
+        running, imgOrig = cap.read()
+        
         if(running):
-            boxes= frameTrackingData2BoxData(dataFile[k,:])
+            boxes = frameTrackingData2BoxData(dataFile[k,:])
             boxColors = [(255,0,0),(0,255,0),(0,0,255)]
             for k in range(0,3):
                 aBox = boxes[k]
                 cv2.rectangle(imgOrig, aBox[0], aBox[1], boxColors[k])
-            cv2.imshow("boxes",imgOrig);
+            
+            g = (boxes[1][0][0] + ((boxes[1][1][0] - boxes[1][0][0]) / 2), boxes[1][1][1])
+            path.append(g)
+            
+            Hg = (g[0], g[1], 1)
+            Hma = np.dot(Hgm, Hg)
+            ma = (int(Hma[0] / Hma[2]), int(Hma[1] / Hma[2]))
+            
+            trace = copy(ituMap)
+            cv2.circle(trace, ma, 2, (0, 0, 255), 2)
+            cv2.imshow("map", trace)
+            
+            vid = np.zeros(videoSize, np.uint8)
+            vid[:h1, (w1 / 2):w1 + (w1 / 2)] = imgOrig
+            vid[h1: h1 + h2, :w2] = trace
+            cv2.imshow("result", vid)
+            videoWriter.write(vid)
+            
             cv2.waitKey(1)
+    
+    DisplayTrace(ituMap, path, Hgm)
+    cv2.waitKey(0)
+
+def DisplayTrace(img, points, H):
+    for p in points:
+        Hp = (p[0], p[1], 1)
+        Hm = np.dot(H, Hp)
+        m = (int(Hm[0] / Hm[2]), int(Hm[1] / Hm[2]))
+        cv2.circle(img, m, 1, (0, 0, 255), 1)
+    numpy.save("H_G_M", H)
+    cv2.imshow("map", img)
 
 def angle_cos(p0, p1, p2):
     d1, d2 = p0-p1, p2-p1
@@ -203,6 +250,7 @@ def texturemapObjectSequence():
             cv2.imshow("Detection",imgOrig)
             cv2.waitKey(1)
 showFloorTrackingData()
+#showImageAndPlot()
 #simpleTextureMap()
 #realisticTexturemap(0,0,0)
 #texturemapGridSequence()
