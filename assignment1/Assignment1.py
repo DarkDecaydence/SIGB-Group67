@@ -17,7 +17,7 @@ from matplotlib.pyplot import *
 
 
 inputFile = "Sequences/eye1.avi"
-outputFile = "eyeTrackerResult.mp4"
+outputFile = "Sequences/results.avi"
 
 #--------------------------
 #         Global variable
@@ -59,32 +59,31 @@ def circleTest(img, center, radius, samples):
         cv2.line(img, (x - dx, y - dy), (x + dx, y + dy), (0,255,0))
 
 def GetPupil(gray,thr, minSize, maxSize):
-    '''Given a gray level image, gray and threshold value return a list of pupil locations'''
-    tempResultImg = cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR) #used to draw temporary results
-    #cv2.imshow("TempResults",tempResultImg)
+	'''Given a gray level image, gray and threshold value return a list of pupil locations'''
+	tempResultImg = cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR) #used to draw temporary results
+	#cv2.imshow("TempResults",tempResultImg)
 
-    props = RegionProps()
-    val,binI = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY_INV)
+	props = RegionProps()
+	val,binI = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY_INV)
     
     # Custom Morphology --
-    kernel = np.ones((10, 10), np.uint8)
-    binI = cv2.dilate(binI, kernel, iterations = 1)
-    binI = cv2.erode(binI, kernel, iterations = 1)
+	kernel = np.ones((10, 10), np.uint8)
+	binI = cv2.dilate(binI, kernel, iterations = 1)
+	binI = cv2.erode(binI, kernel, iterations = 1)
     
-    #cv2.imshow("Threshold",binI)
-    #Calculate blobs
-    contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    pupils = [];
-    # YOUR IMPLEMENTATION HERE !!!
-    for con in contours:
-        if len(con) >= 5:
-            p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
-            if minSize < p["Area"] < maxSize \
-            and p["Extend"] > 0.5:
-                pupils.append(cv2.fitEllipse(con))
-        
-    
-    return pupils
+	#cv2.imshow("Threshold",binI)
+	#Calculate blobs
+	contours, hierarchy = cv2.findContours(binI, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+	pupils = [];
+	# YOUR IMPLEMENTATION HERE !!!
+	for con in contours:
+		if len(con) >= 5:
+			p = props.CalcContourProperties(con, ["Area", "Boundingbox", "Centroid", "Extend"])
+			if minSize < p["Area"] < maxSize \
+			and p["Extend"] > 0.5:
+				pupils.append(cv2.fitEllipse(con))
+	
+	return pupils
 
 def GetGlints(gray,thr, maxSize):
     ''' Given a gray level image, gray and threshold
@@ -160,28 +159,27 @@ def circularHough(gray):
      cv2.imshow("hough",gColor)
 
 def GetIrisUsingNormals(img, gray, pupils, normalLength):
-    xIm, yIm, magIm, angleIm = getGradientImageInfo(gray)
-    iris = []
-    for ((pX, pY), pRad, pAng) in pupils:
-        P = getCircleSamples(center = (pX, pY), radius=130, nPoints=50)
-        irisPoints = []
-        for (xf, yf, dxf, dyf) in P:
-            maxGrad = 0
-            maxPoint = (-1, -1)
-            band = 40
-            ix, iy, idx, idy = int(xf), int(yf), int(dxf * band), int(dyf * band)
-            angle = math.atan2(dyf, dxf)* (180 / math.pi)
-            maxX, maxY = magIm.shape
-            cv2.line(img, (ix - idx, iy - idy), (ix + idx, iy + idy), (255, 255, 0))
-            for (x, y) in getLineCoordinates((ix - idx, iy - idy), (ix + idx, iy + idy)):
-                if 0 < x < maxX and 0 < y < maxY and magIm[x][y] > maxGrad and math.fabs(angleIm[x][y] - angle) > 45:
-                    maxGrad = magIm[x][y]
-                    maxPoint = (x, y)
-            cv2.circle(img, maxPoint, 2, (255, 255, 0), 4)
-            if maxGrad > 0:
-                irisPoints.append(maxPoint)
-        iris.append(cv2.fitEllipse(np.array(irisPoints)))
-    return iris
+	xIm, yIm, magIm, angleIm = getGradientImageInfo(gray)
+	iris = []
+	for ((pX, pY), pRad, pAng) in pupils:
+		P = getCircleSamples(center = (pX, pY), radius=120, nPoints=50)
+		irisPoints = []
+		for (xf, yf, dxf, dyf) in P:
+			maxGrad = 0
+			maxPoint = (-1, -1)
+			band = 40
+			ix, iy, idx, idy = int(xf), int(yf), int(dxf * band), int(dyf * band)
+			angle = math.atan2(dyf, dxf)* (180 / math.pi)
+			maxX, maxY = magIm.shape
+			for (x, y) in getLineCoordinates((ix - idx, iy - idy), (ix + idx, iy + idy)):
+				if 0 < x < maxX and 0 < y < maxY and magIm[x][y] > maxGrad and math.fabs(angleIm[x][y] - angle) > 45:
+					maxGrad = magIm[x][y]
+					maxPoint = (x, y)
+			if maxGrad > 0:
+				irisPoints.append(maxPoint)
+		if len(irisPoints) > 5:
+			iris.append(cv2.fitEllipse(np.array(irisPoints)))
+	return iris
 
 def GetIrisUsingSimplifyedHough(gray,pupil):
     ''' Given a gray level image, gray
@@ -206,59 +204,58 @@ def FilterPupilGlint(pupils,glints,glinsDistance):
 
 
 def update(I):
-    '''Calculate the image features and display the result based on the slider values'''
-    #global drawImg
-    global frameNr,drawImg
-    img = I.copy()
-    sliderVals = getSliderVals()
-    gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
-    gray = cv2.equalizeHist(gray)
-    
-    pupils = GetPupil(gray,sliderVals['pupilThr'],sliderVals['minSize'],sliderVals['maxSize'])
-    glints = GetGlints(gray,sliderVals['glintThr'],sliderVals['glinsMax'])
-    FilterPupilGlint(pupils,glints, sliderVals["glinsDistance"])
-    iris = GetIrisUsingNormals(img, gray, pupils, sliderVals["irisThr"])
+	'''Calculate the image features and display the result based on the slider values'''
+	#global drawImg
+	global frameNr,drawImg
+	img = I.copy()
+	sliderVals = getSliderVals()
+	gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+	gray = cv2.equalizeHist(gray)
+	
+	pupils = GetPupil(gray,sliderVals['pupilThr'],sliderVals['minSize'],sliderVals['maxSize'])
+	glints = GetGlints(gray,sliderVals['glintThr'],sliderVals['glinsMax'])
+	FilterPupilGlint(pupils,glints, sliderVals["glinsDistance"])
+	iris = GetIrisUsingNormals(img, gray, pupils, sliderVals["irisThr"])
 
-    #Do template matching
-    global leftTemplate
-    global rightTemplate
-    GetEyeCorners(leftTemplate, rightTemplate)
-    #Display results
-    global frameNr,drawImg
-    x,y = 10,10
-    #setText(img,(x,y),"Frame:%d" %frameNr)
-    sliderVals = getSliderVals()
+	#Do template matching
+	global leftTemplate
+	global rightTemplate
+	GetEyeCorners(leftTemplate, rightTemplate)
+	#Display results
+	global frameNr,drawImg
+	x,y = 10,10
+	#setText(img,(x,y),"Frame:%d" %frameNr)
+	sliderVals = getSliderVals()
 
-    # for non-windows machines we print the values of the threshold in the original image
-    if sys.platform != 'win32':
-        step=18
-        cv2.putText(img, "pupilThr :"+str(sliderVals['pupilThr']), (x, y+step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
-        cv2.putText(img, "glintThr :"+str(sliderVals['glintThr']), (x, y+2*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
-        cv2.putText(img, "minSize :"+str(sliderVals['minSize']), (x, y+3*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
-        cv2.putText(img, "maxSize :"+str(sliderVals['maxSize']), (x, y+4*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
-    
+	# for non-windows machines we print the values of the threshold in the original image
+	if sys.platform != 'win32':
+		step=18
+		cv2.putText(img, "pupilThr :"+str(sliderVals['pupilThr']), (x, y+step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
+		cv2.putText(img, "glintThr :"+str(sliderVals['glintThr']), (x, y+2*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
+		cv2.putText(img, "minSize :"+str(sliderVals['minSize']), (x, y+3*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
+		cv2.putText(img, "maxSize :"+str(sliderVals['maxSize']), (x, y+4*step), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.CV_AA)
+	
 
-        #Uncomment these lines as your methods start to work to display the result in the
-        #original image
-    for pupil in pupils:
-        cv2.ellipse(img,pupil,(0,255,0),1)
-        C = int(pupil[0][0]),int(pupil[0][1])
-        cv2.circle(img,C, 2, (0,0,255),4)
-    for glint in glints:
-        C = int(glint[0]),int(glint[1])
-        cv2.circle(img, C, 2,(255, 0, 255),2)
-         #cv2.imshow("Result", img)
-    
-    for ir in iris:
-        cv2.ellipse(img,ir,(255,255,0),1)
-        #circularHough(gray)
+		#Uncomment these lines as your methods start to work to display the result in the
+		#original image
+	for pupil in pupils:
+		cv2.ellipse(img,pupil,(0,255,0),1)
+		C = int(pupil[0][0]),int(pupil[0][1])
+		cv2.circle(img,C, 2, (0,0,255),4)
+	for glint in glints:
+		C = int(glint[0]),int(glint[1])
+		cv2.circle(img, C, 2,(255, 0, 255),2)
+	
+	for ir in iris:
+		cv2.ellipse(img,ir,(255,255,0),1)
+		#circularHough(gray)
 
-    #copy the image so that the result image (img) can be saved in the movie
-    
-    cv2.imshow('Result',img)
-    drawImg = img.copy()
-    
-    detectPupilKMeans(gray,20, distanceWeight=2)
+	#copy the image so that the result image (img) can be saved in the movie
+	
+	cv2.imshow('Result',img)
+	drawImg = img.copy()
+	
+	#detectPupilKMeans(gray, K=sliderVals['distWeight'], distanceWeight=2)
 
 
 def printUsage():
@@ -269,7 +266,7 @@ def printUsage():
     print 's: toggle video  writing'
     print 'c: close video sequence'
 
-def run(fileName,resultFile='eyeTrackingResults.avi'):
+def run(fileName,resultFile):
 
     ''' MAIN Method to load the image sequence and handle user inputs'''
     global imgOrig, frameNr,drawImg
@@ -459,22 +456,22 @@ def setText(dst, (x, y), s):
 
 
 def setupWindowSliders():
-    ''' Define windows for displaying the results and create trackbars'''
-    cv2.namedWindow("Result")
-    cv2.namedWindow('Threshold')
-    cv2.namedWindow("TempResults")
-    #Threshold value for the pupil intensity
-    cv2.createTrackbar('pupilThr','Threshold', 15, 255, onSlidersChange)
-    #Threshold value for the glint intensities
-    cv2.createTrackbar('glintThr','Threshold', 245, 255,onSlidersChange)
-    #define the minimum and maximum areas of the pupil
-    cv2.createTrackbar('irisThr','Threshold', 128,255, onSlidersChange)
-    cv2.createTrackbar('minSize','Threshold', 500, 5000, onSlidersChange)
-    cv2.createTrackbar('maxSize','Threshold', 4800, 5000, onSlidersChange)
-    cv2.createTrackbar('glinsMax','Threshold', 20,100, onSlidersChange)
-    cv2.createTrackbar('glinsDistance','Threshold', 50,200, onSlidersChange)
-    #Value to indicate whether to run or pause the video
-    cv2.createTrackbar('Stop/Start','Threshold', 0,1, onSlidersChange)
+	''' Define windows for displaying the results and create trackbars'''
+	cv2.namedWindow("Result")
+	cv2.namedWindow('Threshold')
+	cv2.namedWindow("TempResults")
+	#Threshold value for the pupil intensity
+	cv2.createTrackbar('pupilThr','Threshold', 15, 255, onSlidersChange)
+	#Threshold value for the glint intensities
+	cv2.createTrackbar('glintThr','Threshold', 245, 255,onSlidersChange)
+	#define the minimum and maximum areas of the pupil
+	cv2.createTrackbar('irisThr','Threshold', 128,255, onSlidersChange)
+	cv2.createTrackbar('minSize','Threshold', 500, 5000, onSlidersChange)
+	cv2.createTrackbar('maxSize','Threshold', 4800, 5000, onSlidersChange)
+	cv2.createTrackbar('glinsMax','Threshold', 20,150, onSlidersChange)
+	cv2.createTrackbar('glinsDistance','Threshold', 50,200, onSlidersChange)
+	#Value to indicate whether to run or pause the video
+	cv2.createTrackbar('Stop/Start','Threshold', 0,1, onSlidersChange)
 
 def getSliderVals():
     '''Extract the values of the sliders and return these in a dictionary'''
@@ -500,4 +497,4 @@ def onSlidersChange(dummy=None):
 #--------------------------
 #         main
 #--------------------------
-run(inputFile)
+run(inputFile, outputFile)

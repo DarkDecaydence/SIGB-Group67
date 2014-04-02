@@ -13,15 +13,15 @@ Before we applied the morphing, we had a very large number of pupil candidates, 
 	\caption{The binary image and pupil detection before morphology has been applied.}
 \end{figure}
 
-Since any contour is a list of points, connected by lines, we found that one can safely assume that the pupil is a contour made up of at least some amount of points. We found that any contour made up of less than 5 points was certainly not the pupil, hence we setup a filter that disregards all such contours. Since a pupil is circular (or elliptical), a contour made from 5 points would have too few edges, and can therefore be disregarded as a pupil.\newline
+Since any contour is a list of points, connected by lines, we found that one can safely assume that the pupil is a contour made up of at least some amount of points. The method \emph{cv2.fitEllipse(...)} refuses to fit an ellipse to a contour made up of less than 5 points, hence we setup a filter that disregards all such contours. Since a pupil is circular (or elliptical), a contour made from 5 points would have too few edges, and can therefore safely be disregarded as a pupil.\newline
 
-Our second filter checks whether the area of the contour is within the minimum and maximum size of the pupil, given by the sliders \emph{minSize} and \emph{maxSize}\footnote{minSize and maxSize are passed as arguments to the GetPupil(...) function.}. These values determine whether a specific contour has an area that is either too large, or too small. This filter is especially useful at filtering minor artifacts and noise that appears in crevices or the like.\newline
+Our second filter checks whether the area of the contour is within the minimum and maximum size of the pupil, given by the sliders \emph{minSize} and \emph{maxSize}\footnote{minSize and maxSize are passed as arguments to the GetPupil(...) function.}. These values determine whether a specific contour has an area that is either too large, or too small. This filter is especially useful at filtering minor artifacts and noise that appears in crevices or the like. We found that a minimum of 500 and maximum of 5000 gave decent results for most, though not all, of the example sequences. \newline
 
 The third and final filter checks the contour's extension ratio. Assuming that the pupil is circular, we know that its area \(A_p \approx r^2*\pi\), and the area of its bounding box \(A_b = w*h \approx (2r)^2 \quad | \quad w \approx 2r \wedge h \approx 2r\). Knowing this, we can find out what the standard extension of a circle would be:
 
 \[x = \frac{A_p}{A_b} = \frac{r^2*\pi}{(2r)^2} = \frac{r^2*\pi}{4*r^2}\]
 
-Since the ratio \(\frac{z*x}{z*y} = \frac{x}{y}\), given that \(z = r^2\), we can declare the extension ratio to be \(\frac{\pi}{4}\)
+Since the ratio \(\frac{z*x}{z*y} = \frac{x}{y}\), we can declare the extension ratio to be \(\frac{\pi}{4}\), or 0.785. We decide to put a lower bound on the extend equal to 0.5, though we could have put upper and lower bounds on the value closer to 0.785, to enforce closer proximity to a circle.
 \newline
 
 Alongside our filters, we reduce the number of pupil candidates drastically using morphology.\newline
@@ -31,13 +31,20 @@ The morphing is done by dilating the binary image 10 pixels, and then eroding th
 \begin{figure}[h]
 	\centering
 	\includegraphics[scale=0.3]{morphology.png}
+	\caption{The effect of morphology on the binary image.}
+\end{figure}
+\begin{figure}[h]
+	\centering
 	\includegraphics[scale=0.3]{morphology_results.png}
-	\caption{The morphology applied to the binary image, and the effect on the pupil tracking.}
+		\caption{The effect of morphology on pupil tracking.}
 \end{figure}
 
-While our efforts does help us reduce the number of potential candidates for the pupil, it is not flawless, and still finds multiple candidates. This is likely due to our premises not being capable of isolating the pupil. Yet, as seen in the figure, the premises and morphology does indeed find the pupil with a fair amount of certainty.
+While our efforts does help us reduce the number of potential candidates for the pupil, it is not flawless, and still finds multiple candidates. This is likely due to our premises not being capable of isolating the pupil.
 \newline
 
 \subsection{Finding the pupil with Clustering}
-The next step after finding the pupil and glints based on thresholds and morphology was to use clustering to segment the image into the regions of interest. For this we used the k-means method based on intensity and position as feature vectors. Playing around with the position or \emph{distanceWeight} we found that changing this value does not give a significant improvement for the segmentation of the pupil. On the other hand, we found that a \emph{k} value of 5 gives a good separation of the pupil as one cluster for the \emph{eye1.avi} sequence, but because of the changes in intensity the same value does not apply for all the sequences.  
-(TO-DO 7-10 pupil detection using clustering)
+The next step after finding the pupil and glints based on thresholds and morphology was to use clustering to segment the image into the regions of interest. For this we used the k-means method based on intensity and position as feature vectors. Playing around with the position or \emph{distanceWeight} we found that changing this value does not give a significant improvement for the segmentation of the pupil. On the other hand, we found that a number of clusters equal to 5 gives a good separation of the pupil as one cluster for the \emph{eye1.avi} sequence, but because of the changes in intensity the same value does not apply for all the sequences.\newline
+
+We were unfortunately unable to use the results of the clustering techniques to find a threshold for the pupil detection. This was due to a technical inability to implement this functionality in Python.\\
+The concept behind the process would to pick one or more clusters with the lowest intensity, and using the value at which they separate from the remaining clusters as the threshold, in an attempt to ensure that the dark, closely collected area we are looking for (the pupil) is always put on the other side of the threshold than its surroundings.\\
+We were unable to extract the necessary information from the clustering method, and it was decided not to spend more time on this issue in order to finish the assignment on time. 
