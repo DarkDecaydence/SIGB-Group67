@@ -2,6 +2,7 @@
 import cv2
 import cv
 import numpy as np
+from numpy import linalg
 from pylab import *
 from matplotlib import *
 from matplotlib.pyplot import *
@@ -25,10 +26,10 @@ def simpleTextureMap():
     I2 = cv2.imread('Images/ITUMap.bmp')
 
     #Print Help
-    H,Points  = SIGBTools.getHomographyFromMouse(I1,I2,4)
+    H,Points  = getHomographyFromMouse(I1,I2,-4)
     h, w,d = I2.shape
     overlay = cv2.warpPerspective(I1, H,(w, h))
-    M = cv2.addWeighted(I2, 0.5, overlay, 0.5,0)
+    M = cv2.addWeighted(I2, 0.5, overlay, 0.5, 0)
 
     cv2.imshow("Overlayed Image",M)
     cv2.waitKey(0)
@@ -68,15 +69,16 @@ def texturemapGridSequence():
     cap = cv2.VideoCapture(fn)
     drawContours = True;
 
-    texture = cv2.imread('Images/ITULogo.jpg')
+    texture = cv2.imread('Images/cat.jpg')
     texture = cv2.pyrDown(texture)
 
 
-    mTex,nTex,t = texture.shape
+    mTex,nTex,_ = texture.shape
+    texCorners = np.array([[float(nTex), float(mTex)], [float(0.0), float(mTex)], [float(nTex), float(0.0)], [float(0.0), float(0.0)]])
 
     #load Tracking data
     running, imgOrig = cap.read()
-    mI,nI,t = imgOrig.shape
+    mI,nI,_ = imgOrig.shape
 
     cv2.imshow("win2",imgOrig)
 
@@ -92,19 +94,105 @@ def texturemapGridSequence():
             found, corners = cv2.findChessboardCorners(gray, pattern_size)
             if found:
                 term = ( cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1 )
-                cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), term)
-                cv2.drawChessboardCorners(imgOrig, pattern_size, corners, found)
-
-                for t in idx:
-                    cv2.circle(imgOrig,(int(corners[t,0,0]),int(corners[t,0,1])),10,(255,t,t))
+                
+                rect = np.array([[float(corners[t, 0, 0]), float(corners[t, 0, 1])] for t in idx])
+                H, _ = cv2.findHomography(texCorners, rect)
+                mI,nI,_ = imgOrig.shape
+                overlay = cv2.warpPerspective(texture, H,(nI, mI))
+                imgOrig = cv2.addWeighted(imgOrig, 0.4, overlay, 0.6, 0)
             cv2.imshow("win2",imgOrig)
             cv2.waitKey(1)
 
 
+def textureMapGroundFloor():
+    fn = "GroundFloorData/sunclipds.avi"
+    cap = cv2.VideoCapture(fn)
+	
+    running, imgOrig = cap.read()
+    dataFile = np.loadtxt('GroundFloorData/trackingdata.dat')
+    m,n = dataFile.shape
+	
+    texture = cv2.imread("Images/cat.jpg")   
+	
+    H, _ = getHomographyFromMouse(texture, imgOrig, -4)
+	
+    h, w, _ = imgOrig.shape
+    overlay = cv2.warpPerspective(texture, H, (w, h))
+    
+    for i in range(m):
+        running, imgOrig = cap.read()
+        if running:
+            frame = cv2.addWeighted(imgOrig, 0.5, overlay, 0.5, 0)
+            cv2.imshow("cat projection", frame)
+        cv2.waitKey(1)
+    
+    cv2.waitKey(0)
 
-def realisticTexturemap(scale,point,map):
-    #H = np.load('H_G_M')
-    print "Not implemented yet\n"*30
+def realisticTexturemapGroundFloor():
+    fn = "GroundFloorData/sunclipds.avi"
+    cap = cv2.VideoCapture(fn)
+	
+    running, imgOrig = cap.read()
+    dataFile = np.loadtxt('GroundFloorData/trackingdata.dat')
+    m,n = dataFile.shape
+	
+    ituMap = cv2.imread("Images/ITUMap.bmp")
+    h, w, _ = imgOrig.shape
+    
+    fig = figure(2)
+    ax = subplot(1,2,1)
+    ax.imshow(ituMap)
+    ax.axis('image')
+    title("Click in the image")
+    fig.canvas.draw()
+    ax.hold('On')
+    texPoint = fig.ginput(1, -1)
+    
+    for i in range(m):
+        running, imgOrig = cap.read()
+        if running:
+            cv2.imshow("realistic projection", realisticTexturemapLoadHomography(0.1, texPoint[0], ituMap, imgOrig))
+        cv2.waitKey(1)
+        break
+    
+    cv2.waitKey(0)
+
+def realisticTexturemapLoadHomography(scale, point, map, ground):
+    
+    Hmg = linalg.inv(numpy.load("H_G_M.npy"))
+    texture = cv2.imread("Images/cat.jpg")
+    mTex,nTex,_ = texture.shape
+    texCorners = np.array([[float(0.0), float(0.0)], [float(nTex), float(0.0)], [float(0.0), float(mTex)], [float(nTex), float(mTex)]])
+    
+    mSca = (mTex * scale) / 2
+    nSca = (nTex * scale) / 2
+    
+    mapCorners = np.array([[point[0] - nSca, point[1] - mSca], [point[0] + nSca, point[1] - mSca], \
+    [point[0] - nSca, point[1] + mSca], [point[0] + nSca, point[1] + mSca]])
+    
+    Htm, _ = cv2.findHomography(texCorners, mapCorners)
+    nM, mM, _ = map.shape
+    nG, mG, _ = ground.shape
+    overlay = cv2.warpPerspective(cv2.warpPerspective(texture, Htm,(mM, nM)), Hmg, (mG, nG))
+    return cv2.addWeighted(ground, 0.5, overlay, 0.5, 0)
+
+def realisticTexturemap(Hmg, scale, point, map, ground):
+    
+    texture = cv2.imread("Images/cat.jpg")
+    mTex,nTex,_ = texture.shape
+    texCorners = np.array([[float(0.0), float(0.0)], [float(nTex), float(0.0)], [float(0.0), float(mTex)], [float(nTex), float(mTex)]])
+    
+    mSca = (mTex * scale) / 2
+    nSca = (nTex * scale) / 2
+    
+    mapCorners = np.array([[point[0] - nSca, point[1] - mSca], [point[0] + nSca, point[1] - mSca], \
+    [point[0] - nSca, point[1] + mSca], [point[0] + nSca, point[1] + mSca]])
+    
+    Htm, _ = cv2.findHomography(texCorners, mapCorners)
+    nM, mM, _ = map.shape
+    nG, mG, _ = ground.shape
+    overlay = cv2.warpPerspective(cv2.warpPerspective(texture, Htm,(mM, nM)), Hmg, (mG, nG))
+    return cv2.addWeighted(ground, 0.5, overlay, 0.5, 0)
 
 
 def showFloorTrackingData():
@@ -249,8 +337,9 @@ def texturemapObjectSequence():
             cv2.circle(imgOrig,(100,100),10,(255,0,0))
             cv2.imshow("Detection",imgOrig)
             cv2.waitKey(1)
-showFloorTrackingData()
+#showFloorTrackingData()
 #showImageAndPlot()
 #simpleTextureMap()
-#realisticTexturemap(0,0,0)
+#textureMapGroundFloor()
+realisticTexturemapGroundFloor()
 #texturemapGridSequence()
