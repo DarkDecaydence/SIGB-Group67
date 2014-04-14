@@ -1,0 +1,23 @@
+\section{Solution}
+Our description of our solution will be rooted in two major parts, as described in the introduction.
+The following part regards our texture mapping and morphology.\newline
+
+\subsection{Floor Tracking}
+To get in touch with the concepts of morphology, our first assignment was to map the path of a person described by a video file. This mapping should be done, such that the path would correctly appear on an actual map.\newline
+
+The videofile we were provided came accompanied by data related to the movement of the person.\newline
+
+Solving this assignment required us to create the function \textsl{DisplayTrace(...)}, which processes the data and draws the trace onto the actual map. This function draws upon some properties of the \textsl{showFloorTrackingData()} function, and by its extension the \textsl{getHomographyFromMouse(...)} function.\newline
+
+Starting with the \textsl{DisplayTrace(img, points, H)} function, we start out by going through all points provided by the list "points", which is created in the \textsl{showFloorTrackingData()} function, so we start our research there.\newline
+
+The \textsl{showFloorTrackingData()} function finds the three boxes that contain the person which we are tasked to track. Each box determains a different part of the person, and as such, we have chosen to track the "green box", which is the box that describes the feet of our target. It is important to note, that the feet are the best point to go for, since it will be the most precise. Should the camera have a very sharp angle of attack, plotting from the face or torso could give very wrong results. The homography will think that the floor is a different place than it actually is.\newline
+
+We have chosen the bottom middle spot of the green box, to avoid these complications. This should be the most precise point when considering its proximity to the ground, along with its position horizontally. Given the green box \(B_(x,y,w,h)\), we can find the best point \(p_(x,y)\) with the following calculations:
+\[p_y = B_y+B_h \quad | \quad p_x = B_x + (B_w / 2)\]
+
+Now that we have our point, we need to transfer it into a valid point on our map. We do this using a homography.
+
+A homography has the interesting ability, that it is capable of turning one set of coordinates into another. This way, we can insert the coordinates of our traced pathing, and it will help us translate them to fit the map.
+
+With the traced path in hand and translated, we can go paint the path onto the map, in our case, something that is done with the CV2 library and its \textsl{cv2.circle(...)} function.
