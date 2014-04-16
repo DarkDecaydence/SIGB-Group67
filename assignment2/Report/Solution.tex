@@ -9,9 +9,19 @@ The videofile we were provided came accompanied by data related to the movement 
 
 Solving this assignment required us to create the function \textsl{DisplayTrace(...)}, which processes the data and draws the trace onto the actual map. This function draws upon some properties of the \textsl{showFloorTrackingData()} function, and by its extension the \textsl{getHomographyFromMouse(...)} function.\newline
 
-Starting with the \textsl{DisplayTrace(img, points, H)} function, we start out by going through all points provided by the list "points", which is created in the \textsl{showFloorTrackingData()} function, so we start our research there.\newline
+In the \textsl{DisplayTrace(img, points, H)} function we start out by going through all points provided by the list "points". These are created in the \textsl{showFloorTrackingData()} function, so we start our research there.\newline
 
-The \textsl{showFloorTrackingData()} function finds the three boxes that contain the person which we are tasked to track. Each box determains a different part of the person, and as such, we have chosen to track the "green box", which is the box that describes the feet of our target. It is important to note, that the feet are the best point to go for, since it will be the most precise. Should the camera have a very sharp angle of attack, plotting from the face or torso could give very wrong results. The homography will think that the floor is a different place than it actually is.\newline
+The \textsl{showFloorTrackingData()} function finds the three boxes that contain the person which we are tasked to track. Each box determains a different part of the person; red is upper body, blue is complete body, and green is lower body. As such, we have chosen to track the "green box", which is the box that describes the feet of our target.
+The feet should be the best point to go for, since it will be the most precise. Should the camera have a very sharp angle of attack, plotting from the face or torso could give very unaccurate results. The homography will be created such that the floor coordinates get malformed.\newline
+
+\begin{figure}
+	\centering
+	\includegraphics[scale=0.9]{images/viewpointdifference.png}
+	\caption{Differences in viewpoints.}
+	\label{fig:viewpoints}
+\end{figure}
+
+Looking at figure \ref{fig:viewpoints}, we can tell that the difference between the two points \(p1,p2\) on the base plane represented by \(vp_1\) is \(b_l\) when the angle of attack on \(vp_2\) is sharpened. The difference \(b_l\) is dependant on \(a_l\), given that \(b_l = \sqrt{c_l^2-a_l^2}\). \(c_l = \frac{a_l}{sin(A)}\)\newline
 
 We have chosen the bottom middle spot of the green box, to avoid these complications. This should be the most precise point when considering its proximity to the ground, along with its position horizontally. Given the green box \(B_(x,y,w,h)\), we can find the best point \(p_(x,y)\) with the following calculations:
 \[p_y = B_y+B_h \quad | \quad p_x = B_x + (B_w / 2)\]
