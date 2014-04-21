@@ -37,6 +37,18 @@ def getOuterPoints(Corners):
     bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
     return topLeft,topRight,bottomLeft,bottomRight
 
+def getWorldCoordinateSystem(corners):
+    rcCorners = np.array(corners)
+    topLeft = rcCorners[0,0]
+    topLeft = (int(topLeft[0]), int(topLeft[1]))
+    topRight = rcCorners[1, -1]
+    topRight = (int(topRight[0]), int(topRight[1]))
+    bottomLeft = rcCorners[9,-1]
+    bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+    bottomRight = rcCorners[10,-1]
+    bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+    return topLeft,topRight,bottomLeft,bottomRight
+ 
 def update(img):
     image=copy(img)
     if Undistorting:  #Use previous stored camera matrix and distortion coefficient to undistort the image
@@ -92,9 +104,9 @@ def update(img):
                 
                 if method == 1 :
                         
-                    #break down Kt
+                    #break down K[R|t]
                     camera_matrix = dot(cameraMatrix, Kt)
-                    K, R = rq(camera_matrix[:,:3])
+                    K, _ = rq(camera_matrix[:,:3])
                     # make diagonal of K positive
                     T = diag(sign(diag(K)))
                     K = dot(K,T)
@@ -110,7 +122,7 @@ def update(img):
                         point = np.dot(P2_method1, point)
 
                         center = (int(point[0]/point[2]), int(point[1]/point[2]))
-                        cv2.circle(image, center, 7, (0,0,255), 2)
+                        cv2.circle(image, center, 2, (0,0,255), -1)
                     
                 elif method == 2 :    
                     obj_points = [pattern_points]
@@ -129,86 +141,62 @@ def update(img):
                         point = [point[0], point[1], point[2], 1]
                         point = np.dot(P2_method2, point)
                         center = (int(point[0]/point[2]), int(point[1]/point[2]))
-                        cv2.circle(image, center, 7, (0,255,0), 2)
-                    ''' <008> Here Draw the world coordinate system in the image'''            
+                        cv2.circle(image, center, 5, (0,255,0), -1)
+                ''' <008> Here Draw the world coordinate system in the image'''            
                 # topLeft,topRight,bottomLeft,bottomRight
-                cornerAxis0 = currentViewPoints[0]
-                cornerAxis0 = (int(cornerAxis0[0]), int(cornerAxis0[1]))
-                cornerAxis0x = currentViewPoints[1]
-                cornerAxis0y = currentViewPoints[2]
-                cornerAxis0z = (int( (cornerAxis0x[0]+cornerAxis0y[0])/2 ), int((cornerAxis0x[1]+cornerAxis0y[1])/2))
+                topLeft, topRight, bottomLeft, bottomRight = getWorldCoordinateSystem(currentCorners)
+                
+                cv2.line(image, topLeft, topRight, (255,0,0), 2)
+                cv2.line(image, topLeft, bottomLeft, (0,255,0), 2)
+                cv2.line(image, topLeft, bottomRight, (0,0,255), 2)
 
-                cv2.line(image, cornerAxis0, cornerAxis0x, (255,0,0), 3)
-                cv2.line(image, cornerAxis0, cornerAxis0y, (0,255,0), 3)
-                cv2.line(image, cornerAxis0, cornerAxis0z, (0,0,255), 3)
+                cv2.circle(image, topRight, 5, (255,0,0), -1)
+                cv2.circle(image, bottomLeft, 5, (0,255,0), -1)
+                cv2.circle(image, bottomRight, 5, (0,0,255), -1)
                     
             if WireFrame:                      
                 ''' <009> Here Project the box into the current camera image and draw the box edges''' 
-                topFace = np.int32(TopFace).reshape(-1,3)
-                rightFace = np.int32(RightFace).reshape(-1,3)
-                leftFace = np.int32(LeftFace).reshape(-1,3)
-                upFace = np.int32(UpFace).reshape(-1,3)
-                downFace = np.int32(DownFace).reshape(-1,3)
-                global method
-                topFaceProjected = []
-                for point in topFace:
+                topFace = np.int32(TopFace).reshape(-1,2)
+                rightFace = np.int32(RightFace).reshape(-1,2)
+                leftFace = np.int32(LeftFace).reshape(-1,2)
+                upFace = np.int32(UpFace).reshape(-1,2)
+                downFace = np.int32(DownFace).reshape(-1,2)
+                completeCube = [topFace, rightFace, leftFace, upFace, downFace]
+                
+                tempCube = np.float32([[3,3,3], [3,6,3], [6,6,3], [6,3,3], [3,3,0],[3,6,0],[6,6,0],[6,3,0]])
+                tempContour = []
+                completeCubeProjected = []
+                
+                for face in completeCube:
+                    faceProjected = []
+                    for point in face:
+                        point = [point[0], point[1], 1, 1]
+                        if method == 1 :
+                            point = np.dot(P2_method1, point)
+                        else :
+                            point = np.dot(P2_method2, point)
+                        faceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
+                    completeCubeProjected.append(faceProjected)
+
+                for point in tempCube:
                     point = [point[0], point[1], point[2], 1]
                     if method == 1 :
                         point = np.dot(P2_method1, point)
                     else :
                         point = np.dot(P2_method2, point)
-                    topFaceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
-                topFaceProjected = np.array(topFaceProjected)
-
-                rightFaceProjected = []
-                for point in rightFace:
-                    point = [point[0], point[1], point[2], 1]
-                    if method == 1 :
-                        point = np.dot(P2_method1, point)
-                    else :
-                        point = np.dot(P2_method2, point)                    
-                    rightFaceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
-                rightFaceProjected = np.array(rightFaceProjected)
-                
-                leftFaceProjected = []
-                for point in leftFace:
-                    point = [point[0], point[1], point[2], 1]
-                    if method == 1 :
-                        point = np.dot(P2_method1, point)
-                    else :
-                        point = np.dot(P2_method2, point)
-                    leftFaceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
-
-                leftFaceProjected = np.array(leftFaceProjected)
-                
-                upFaceProjected = []
-                for point in upFace:
-                    point = [point[0], point[1], point[2], 1]
-                    if method == 1 :
-                        point = np.dot(P2_method1, point)
-                    else :
-                        point = np.dot(P2_method2, point)                    
-                    upFaceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
-                upFaceProjected = np.array(upFaceProjected)
-
-                downFaceProjected = []
-                for point in downFace:
-                    point = [point[0], point[1], point[2], 1]
-                    if method == 1 :
-                        point = np.dot(P2_method1, point)
-                    else :
-                        point = np.dot(P2_method2, point)                   
-                    downFaceProjected.append((int(point[0]/point[2]), int(point[1]/point[2])))
-
-                downFaceProjected = np.array(downFaceProjected)
-
-                cv2.drawContours(image, [topFaceProjected] ,-1,(0,255,255),2)
-                cv2.drawContours(image, [rightFaceProjected] ,-1,(0,0,255),2)
-                cv2.drawContours(image, [leftFaceProjected] ,-1,(255,255,255),2)
-                cv2.drawContours(image, [upFaceProjected] ,-1,(255,0,255),2)
-                cv2.drawContours(image, [downFaceProjected] ,-1,(255,0,0),2)
-
-
+                    tempContour.append((int(point[0]/point[2]), int(point[1]/point[2])))
+                tempContour = np.array(tempContour)
+                #print tempContour
+                #completeCubeProjected = np.array(completeCubeProjected).reshape(-1,4)
+                #print completeCubeProjected
+                #image = DrawLines(image, completeCubeProjected)
+#                cv2.drawContours(image, completeCubeProjected ,-1,(0,255,255),1)
+                cv2.drawContours(image, [tempContour[:4]] ,-1,(255, 0, 255),3)
+                cv2.drawContours(image, [tempContour[4:]] ,-1,(255, 0, 255),3)
+                for i,j in zip(range(4),range(4,8)):
+                    cv2.line(image, tuple(tempContour[i]), tuple(tempContour[j]),(255, 0, 255), 3)
+                    
+                    
     cv2.namedWindow('Web cam')
     cv2.imshow('Web cam', image)  
     global result
@@ -375,15 +363,13 @@ def secondPart():
     firstFrame = cv2.imread("Images/01_daniel.png")
     pattern = cv2.imread("Images/CalibrationPattern.jpg")
     imgGrayPattern = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)  
-    patternFound,cornersPattern = cv2.findChessboardCorners(imgGrayPattern, (9,6))
-    if patternFound ==True:        
-        patternP = [] 
-        patternP = getOuterPoints(cornersPattern)
+    _,cornersPattern = cv2.findChessboardCorners(imgGrayPattern, (9,6))
+    patternP = [] 
+    patternP = getOuterPoints(cornersPattern)
     imgGrayFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)  
-    frameFound, cornersFrame = cv2.findChessboardCorners(imgGrayFrame, (9,6))
-    if frameFound ==True:        
-        frame = [] 
-        frame = getOuterPoints(cornersFrame)
+    _, cornersFrame = cv2.findChessboardCorners(imgGrayFrame, (9,6))
+    frame = [] 
+    frame = getOuterPoints(cornersFrame)
         
     H = estimateHomography(patternP, frame)
     np.save("numpyData/H_ff_pattern.npy", H)
@@ -479,3 +465,5 @@ firstPart()
 secondPart()
 
 run(1,0)
+
+#RecordVideoFromCamera()
