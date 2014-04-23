@@ -1,0 +1,7 @@
+\contentsline {section}{\numberline {1}Introduction}{3}
+\contentsline {section}{\numberline {2}Problem statement}{3}
+\contentsline {section}{\numberline {3}Solution}{3}
+\contentsline {subsection}{\numberline {3.1}Floor Tracking}{3}
+\contentsline {subsection}{\numberline {3.2}Texture Mapping}{5}
+\contentsline {subsection}{\numberline {3.3}Camera Calibration}{6}
+\contentsline {subsection}{\numberline {3.4}Augmentation}{7}
