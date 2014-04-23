@@ -101,6 +101,7 @@ def update(img):
                 pattern_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
                 pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
                 pattern_points *= chessSquare_size
+                print pattern_points
                 
                 if method == 1 :
                         
@@ -120,7 +121,7 @@ def update(img):
                     for point in pattern_points:
                         point = array([point[0], point[1], point[2], 1])
                         point = np.dot(P2_method1, point)
-
+                        print("point", point)
                         center = (int(point[0]/point[2]), int(point[1]/point[2]))
                         cv2.circle(image, center, 2, (0,0,255), -1)
                     
@@ -355,7 +356,7 @@ def firstPart():
         imgH = np.dot(camera, np.dot(Kt, [p[0], p[1], p[2], 1]))
         imgP = [imgH[0] / imgH[2], imgH[1] / imgH[2]]
         cv2.circle(firstFrame, (int(imgP[0]), int(imgP[1])), 3, (0, 0, 255), 4)
-    #cv2.imshow("projection", firstFrame)
+    cv2.imshow("projection", firstFrame)
     #cv2.waitKey(0)
 
 
@@ -364,12 +365,14 @@ def secondPart():
     pattern = cv2.imread("Images/CalibrationPattern.jpg")
     imgGrayPattern = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)  
     _,cornersPattern = cv2.findChessboardCorners(imgGrayPattern, (9,6))
-    patternP = [] 
-    patternP = getOuterPoints(cornersPattern)
+    patternP = getOuterPoints(cornersPattern) 
+    patternP = [(p[0] - patternP[0][0], p[1] - patternP[0][1]) for p in patternP]
+    print patternP
     imgGrayFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)  
     _, cornersFrame = cv2.findChessboardCorners(imgGrayFrame, (9,6))
     frame = [] 
     frame = getOuterPoints(cornersFrame)
+    print frame
         
     H = estimateHomography(patternP, frame)
     np.save("numpyData/H_ff_pattern.npy", H)
@@ -404,7 +407,7 @@ TextureMap=True
 ProjectPattern=True
 #debug=True
 Hdefined=False
-method = 2
+method = 1
 
 tempSpeed=1
 frameNumber=0
@@ -466,4 +469,4 @@ secondPart()
 
 run(1,0)
 
-#RecordVideoFromCamera()
+RecordVideoFromCamera()
