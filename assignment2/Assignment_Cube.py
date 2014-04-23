@@ -49,7 +49,7 @@ def getWorldCoordinateSystem(corners):
     bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
     return topLeft,topRight,bottomLeft,bottomRight
  
-def update(img):
+def update(img, writer=None, record=False):
     image=copy(img)
     if Undistorting:  #Use previous stored camera matrix and distortion coefficient to undistort the image
         ''' <004> Here Undistoret the image''' 
@@ -101,7 +101,6 @@ def update(img):
                 pattern_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
                 pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
                 pattern_points *= chessSquare_size
-                print pattern_points
                 
                 if method == 1 :
                         
@@ -121,7 +120,6 @@ def update(img):
                     for point in pattern_points:
                         point = array([point[0], point[1], point[2], 1])
                         point = np.dot(P2_method1, point)
-                        print("point", point)
                         center = (int(point[0]/point[2]), int(point[1]/point[2]))
                         cv2.circle(image, center, 2, (0,0,255), -1)
                     
@@ -199,7 +197,9 @@ def update(img):
                     
                     
     cv2.namedWindow('Web cam')
-    cv2.imshow('Web cam', image)  
+    cv2.imshow('Web cam', image)
+    if record:
+        writer.write(image)
     global result
     result=copy(image)
 
@@ -225,6 +225,7 @@ def printUsage():
     print 'i: show info'
     print 't: texture map'
     print 's: save frame'
+    print 'r: record video'
 
     
    
@@ -236,12 +237,15 @@ def run(speed,video):
     capture = cv2.VideoCapture(video)
 
 
-    image, isSequenceOK = getImageSequence(capture,speed)       
+    image, isSequenceOK = getImageSequence(capture,speed)
+    H,W,_ = image.shape
+    record = False
 
     if(isSequenceOK):
         update(image)
         printUsage()
-
+    
+    writer = cv2.VideoWriter('CubeProjections.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
     while(isSequenceOK):
         OriginalImage=copy(image)
      
@@ -323,10 +327,16 @@ def run(speed,video):
         if inputKey == ord('s') or inputKey == ord('S'):
             name='Saved Images/Frame_' + str(frameNumber)+'.png' 
             cv2.imwrite(name,result)
+        
+        if inputKey == ord('r') or inputKey == ord('R'):
+            record = not record
+            print "recording..." if record else "stopped recording"
            
         if (speed>0):
-            update(image)
-            image, isSequenceOK = getImageSequence(capture,speed)          
+            update(image, writer, record)
+            image, isSequenceOK = getImageSequence(capture,speed)
+
+    writer.release()
 
 
 def firstPart():
@@ -356,7 +366,7 @@ def firstPart():
         imgH = np.dot(camera, np.dot(Kt, [p[0], p[1], p[2], 1]))
         imgP = [imgH[0] / imgH[2], imgH[1] / imgH[2]]
         cv2.circle(firstFrame, (int(imgP[0]), int(imgP[1])), 3, (0, 0, 255), 4)
-    cv2.imshow("projection", firstFrame)
+    #cv2.imshow("projection", firstFrame)
     #cv2.waitKey(0)
 
 
@@ -365,14 +375,11 @@ def secondPart():
     pattern = cv2.imread("Images/CalibrationPattern.jpg")
     imgGrayPattern = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)  
     _,cornersPattern = cv2.findChessboardCorners(imgGrayPattern, (9,6))
-    patternP = getOuterPoints(cornersPattern) 
-    patternP = [(p[0] - patternP[0][0], p[1] - patternP[0][1]) for p in patternP]
-    print patternP
+    patternP = getOuterPoints(cornersPattern)
     imgGrayFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)  
     _, cornersFrame = cv2.findChessboardCorners(imgGrayFrame, (9,6))
     frame = [] 
     frame = getOuterPoints(cornersFrame)
-    print frame
         
     H = estimateHomography(patternP, frame)
     np.save("numpyData/H_ff_pattern.npy", H)
@@ -469,4 +476,4 @@ secondPart()
 
 run(1,0)
 
-RecordVideoFromCamera()
+#RecordVideoFromCamera()
