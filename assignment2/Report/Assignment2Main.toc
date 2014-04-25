@@ -1,7 +1,13 @@
 \contentsline {section}{\numberline {1}Introduction}{3}
 \contentsline {section}{\numberline {2}Problem statement}{3}
-\contentsline {section}{\numberline {3}Solution}{3}
-\contentsline {subsection}{\numberline {3.1}Floor Tracking}{3}
-\contentsline {subsection}{\numberline {3.2}Texture Mapping}{5}
-\contentsline {subsection}{\numberline {3.3}Camera Calibration}{6}
-\contentsline {subsection}{\numberline {3.4}Augmentation}{7}
+\contentsline {section}{\numberline {3}Solution}{4}
+\contentsline {subsection}{\numberline {3.1}Floor Tracking}{4}
+\contentsline {subsection}{\numberline {3.2}Texture Mapping}{6}
+\contentsline {subsection}{\numberline {3.3}Camera Calibration}{7}
+\contentsline {subsection}{\numberline {3.4}Augmentation}{8}
+\contentsline {section}{\numberline {4}Discussion}{10}
+\contentsline {subsection}{\numberline {4.1}Floor tracking}{10}
+\contentsline {subsection}{\numberline {4.2}Texture mapping}{10}
+\contentsline {subsection}{\numberline {4.3}Camera calibration}{10}
+\contentsline {subsection}{\numberline {4.4}Augmentation}{11}
+\contentsline {section}{\numberline {5}Conclusion}{11}
