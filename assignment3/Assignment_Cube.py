@@ -63,12 +63,13 @@ def update(img, writer=None, record=False):
         if patternFound ==True:        
             currentViewPoints = [] 
             currentViewPoints = getOuterPoints(currentCorners)
-            cv2.circle(image, currentViewPoints[0], 5, (255,0,0), -1)
-            cv2.circle(image, currentViewPoints[1], 5, (255,0,0), -1)
-            cv2.circle(image, currentViewPoints[2], 5, (255,0,0), -1)
-            cv2.circle(image, currentViewPoints[3], 5, (255,0,0), -1)
+            if ProjectPattern:
+                cv2.circle(image, currentViewPoints[0], 5, (255,0,0), -1)
+                cv2.circle(image, currentViewPoints[1], 5, (255,0,0), -1)
+                cv2.circle(image, currentViewPoints[2], 5, (255,0,0), -1)
+                cv2.circle(image, currentViewPoints[3], 5, (255,0,0), -1)
 
-            firstView = cv2.imread("Images/01_daniel.png")
+            firstView = cv2.imread(videoSequence)
             fVGray=cv2.cvtColor(firstView, cv2.COLOR_BGR2GRAY)  
             foundFV,cornersFV=cv2.findChessboardCorners(fVGray, (9,6))
             fVPoints = [] 
@@ -196,8 +197,8 @@ def update(img, writer=None, record=False):
                     cv2.line(image, tuple(tempContour[i]), tuple(tempContour[j]),(255, 0, 255), 3)
                     
                     
-    cv2.namedWindow('Web cam')
-    cv2.imshow('Web cam', image)
+    cv2.namedWindow('grid')
+    cv2.imshow('grid', cv2.pyrDown(image))
     if record:
         writer.write(image)
     global result
@@ -238,6 +239,7 @@ def run(speed,video):
 
 
     image, isSequenceOK = getImageSequence(capture,speed)
+    print isSequenceOK
     H,W,_ = image.shape
     record = False
 
@@ -245,7 +247,7 @@ def run(speed,video):
         update(image)
         printUsage()
     
-    writer = cv2.VideoWriter('CubeProjections.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
+    #writer = cv2.VideoWriter('CubeProjections.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
     while(isSequenceOK):
         OriginalImage=copy(image)
      
@@ -333,15 +335,15 @@ def run(speed,video):
             print "recording..." if record else "stopped recording"
            
         if (speed>0):
-            update(image, writer, record)
+            update(image, None, record)
             image, isSequenceOK = getImageSequence(capture,speed)
 
-    writer.release()
+    #writer.release()
 
 
 def firstPart():
     ''' <002> Here Define the camera matrix of the first view image (01_daniel.png) recorded by the cameraCalibrate2'''
-    firstFrame = cv2.imread("Images/01_daniel.png")
+    firstFrame = cv2.imread(videoSequence)
     pattern_size = (9,6)
     obj_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
     obj_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
@@ -371,8 +373,8 @@ def firstPart():
 
 
 def secondPart():
-    firstFrame = cv2.imread("Images/01_daniel.png")
-    pattern = cv2.imread("Images/CalibrationPattern.jpg")
+    firstFrame = cv2.imread(videoSequence)
+    pattern = cv2.imread("images/CalibrationPattern.jpg")
     imgGrayPattern = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)  
     _,cornersPattern = cv2.findChessboardCorners(imgGrayPattern, (9,6))
     patternP = getOuterPoints(cornersPattern)
@@ -383,7 +385,7 @@ def secondPart():
         
     H = estimateHomography(patternP, frame)
     np.save("numpyData/H_ff_pattern.npy", H)
-    print "H saved"
+    #print "H saved"
 
 
 '''-------------------MAIN BODY--------------------------------------------------------------------'''
@@ -407,14 +409,14 @@ global imgPointsFirst
 global method
     
 ProcessFrame=True
-Undistorting=False   
+Undistorting=True
 WireFrame=True
 ShowText=True
 TextureMap=True
 ProjectPattern=True
 #debug=True
 Hdefined=False
-method = 1
+method = 2
 
 tempSpeed=1
 frameNumber=0
@@ -424,7 +426,7 @@ chessSquare_size=2
 
 '''-------defining the cube------'''
      
-box = getCubePoints([4, 2.5, 0], 1,chessSquare_size)            
+box = getCubePoints([4, 2.5, 3], 1,chessSquare_size)            
 
 
 i = array([ [0,0,0,0],[1,1,1,1] ,[2,2,2,2]  ])  # indices for the first dim 
@@ -459,7 +461,7 @@ DownFace = box[i,j]
 
 
 ''' <000> Here Call the calibrateCamera from the SIGBTools to calibrate the camera and saving the data''' 
-#calibrateCamera()
+#calibrateCamera(fileName="GridVideos/grid2.mp4")
 ''' <001> Here Load the numpy data files saved by the cameraCalibrate2''' 
 
 cameraMatrix = np.load("numpyData/camera_matrix.npy")
@@ -471,9 +473,11 @@ objPoints = np.load("numpyData/obj_points.npy")
 rotationVectors = np.load("numpyData/rotatioVectors.npy")
 translationVectors = np.load("numpyData/translationVectors.npy")
 
+videoSequence = "images/CalibrationFrame.png"
+
 firstPart()
 secondPart()
 
-run(1,0)
+run(5,"GridVideos/grid2.mp4")
 
 #RecordVideoFromCamera()
