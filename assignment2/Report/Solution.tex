@@ -12,7 +12,7 @@ Solving this assignment required us to create the function \textsl{DisplayTrace(
 In the \textsl{DisplayTrace(img, points, H)} function we start out by going through all points provided by the list "points". These are created in the \textsl{showFloorTrackingData()} function, so we start our research there.\newline
 
 The \textsl{showFloorTrackingData()} function finds the three boxes that contain the person which we are tasked to track. Each box determains a different part of the person; red is upper body, blue is complete body, and green is lower body. As such, we have chosen to track the "green box", which is the box that describes the feet of our target.
-The feet should be the best point to go for, since it will be the most precise. Should the camera have a very sharp angle of attack, plotting from the face or torso could give very unaccurate results. The homography will be created such that the floor coordinates get malformed.\newline
+The feet should be the best point to go for, since it will be the most precise. Should the camera have a very sharp angle of attack, plotting from the face or torso could give very inaccurate results. The homography will be created such that the floor coordinates get malformed.\newline
 
 \begin{figure}
 	\centering
@@ -26,10 +26,53 @@ Looking at figure \ref{fig:viewpoints}, we can tell that the difference between 
 We have chosen the bottom middle spot of the green box, to avoid these complications. This should be the most precise point when considering its proximity to the ground, along with its position horizontally. Given the green box \(B_(x,y,w,h)\), we can find the best point \(p_(x,y)\) with the following calculations:
 \[p_y = B_y+B_h \quad | \quad p_x = B_x + (B_w / 2)\]
 
-Now that we have our point, we need to transfer it into a valid point on our map. We do this using a homography.
-
-A homography has the interesting ability, that it is capable of turning one set of coordinates into another. This way, we can insert the coordinates of our traced pathing, and it will help us translate them to fit the map.
+Now that we have our point, we need to transfer it into a valid point on our map. We achieve this using a linear transformation in the form f a homography. We can do this because the transformation between the map and the floor is a simple perspective transformation. \\
+In order to estimate the homography we require four corresponding points to be located in each image. This is necessary because of the amount of information found in the homography. Tthe homography is a $3x3$ matrix, and one number, the scaling parameter, is fixed to be 1. If the transformation preserved either angles or parallel lines, we would be able to make assumptions about the matrix and reduce the number of points required, but in this perspective transformation we cannot. This leaves 8 numbers to be identified, and four 2d points offers exactly that amount of information. This intuition is a little oversimplified, as it is not the amount of numbers needed found, but the \textsl{degrees of freedom} that matters. If one number in the matrix could be derived from another, those two would constitute only one degree of freedom. \\
+We identify the four points on each image by hand, and then use the homography identified to map points from the path in the sequence to points on the map. Only a single homography is necessary, as the camera does not move throughout the sequence. \\
+The result of this transformation is that the geometric representation of the path is more true to reality. In the image sequence the movement of the person would get smaller as the person moves further away from the camera, due to perspective distortions. Consequently measures of euclidean distance between two points on the path, and therefore measures such as total distance travelled and velocity, would be equally distorted if measured on the image sequence. After the transformation is performed, these measures closer approximate reality, and since the perspective distortion is tried removed, any remaining distortion is likely to e uniform across all points on the path. 
 
 With the traced path in hand and translated, we can go paint the path onto the map, in our case, something that is done with the CV2 library and its \textsl{cv2.circle(...)} function.
+The video file \textsl{Floor\_Tracking.avi} shows the result of locating the path.
 
 \subsection{Texture Mapping}
+In this assignment we work with the projection of textures onto surfaces by use of homographies.\\
+First, we project a texture onto an arbitrary area of the floor in the video sequence from the previous section. We accomplish this by estimating a homography from 4 points from each image, in the same fashion as in the previous section. In this case we are trying to map the entire texture onto the floor, so we can make the more relaxed assumption that the four corners of the texture function as points in the estimation. We therefore only have to choose the points on the floor that are to correspond to the corners of the texture. We then simply apply this homography to the texture and overlays the result on the floor. 
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=1]{images/texture_simple.png}
+	\caption{Projection of texture to arbitrary area of the floor.}
+\end{figure}
+Next we have to project the texture onto a chessboard pattern. We solve this task primarily by use of the existing method \textsl{cv2.findChessboardCorners(image, patternSize)}, which for a given image and a tuple describing the configuration of chessboard corner expected found locates the coordinates of the chessboard corner. In this context a corner refers to a point the lies adjacent to two white and two black squares, and as such what a person would identify as the corners of the board are not part of this set, as these points only touch a single square each. This set is then used to estimate a homography that places the texture so it exactly covers the chessboard corners. Any set of four points could be used for this purpose, but the outermost points are used to maximize precision. \\
+The video file \textsl{GridTexture.avi} in appendix shows the result of this transformation. \\
+Finally we are tasked with projecting the texture onto the floor in the image sequence previously mentioned, but to make the mapping more realistic by using the homography from the floor map to the recording identified in first part of the assignment. We are to assume that the texture if it was to be projected onto the floor and from there onto the map would be exactly rectangular and at right angles with the map. We solve this by first projecting the texture onto the map, and from there project it onto the floor using the homography identified in the first section. The homography for the first projection is found by choosing a point on the map, translating the textures center to this point, and then providing a proper scaling. 
+\begin{figure}[h!]
+	\centering
+	\includegraphics[scale=1]{images/texture_projection.png}
+	\caption{More realistic projection of the texture onto the floor.}
+\end{figure}
+
+\subsection{Camera Calibration}
+With the help of an updated version of the \textsl{SIGB-Tools2.py} library the first task was to start learning the different functionalities of the file \textsl{Assignment\_Cube.py}. Once we got to know the code we began with the camera calibration. For this task we used the \textsl{calibrateCamera} function in our tools library and a printed chessboard of size 6x9. This function uses several important variables like \textsl{pattern\_points}, \textsl{img\_points}, and \textsl{img\_points\_first}. \textsl{Pattern\_points} are the position of the inner points of the chessboard squares in the calibration pattern coordinate space. \textsl{Image\_points} are the corners of the chessboard found in the image being captured by the webcam and \textsl{image\_points\_first} contains the \textsl{image\_points} for a picture taken in the first frame of the video. 
+The calibration is done by taking 5 sample views and saves information like the camera calibration matrix, rotation vectors and translation vectors. By modifying the number of samples taken by the calibration function we noticed that increasing the number of samples also increases the accuracy of the calibration and viceversa.\newline 
+After calibrating the camera the next step was to calculate the camera matrix  \textsl{ \(P_1\) = K[ \(R_1\)| \(t_1\) ]} for the first view. This camera matrix with its rotation and translation vectors helped us to project the points taken from the chessboard pattern during the calibration of the camera onto the first view image as seen in figure \ref{fig:projection}. 
+\begin{figure}
+	\centering
+	\includegraphics[scale=0.3]{images/projection_p1.jpg}
+	\caption{Projection of chessboard pattern points to first view image}
+	\label{fig:projection}
+\end{figure}
+
+\subsection{Augmentation}
+For the augmentation part in this assignment the goal is to calculate the camera matrix in each video frame taken from the webcam and project a 3D cube to the same view. The camera matrix is calculated using two different methods: through homographies and directly using extrinsic parameters. \newline
+In the first method two Homographies where used. The first Homography is from the chessboard calibration pattern to the first view image, \(H_cp-fv\). The second Homography is from the first view image to the current view image from the webcam, \(H_fv-cv\). In order to get the second homography we had to locate the 4 outer corners of the calibration patter in the playing video. Having these two homographies we could compute the homography form the chessboard pattern to the current view of the webcam by applying a dot product which gave us the homography \(H_cp-cv\). This third homography was used to calculate the camera matrix \textsl{P2\_Method1}. Several operations had to be applied to get to this result. First, the previous camera matrix was broken apart to get the intrinsic parameters' matrix \textsl{K} which were used to compute the new rotation vector. Second, a dot product between the previous camera matrix and the homography \(H_cp-cv\) was applied and the result was complemented with the new rotation vector to conform the new camera matrix \textsl{P2\_Method1}.\newline
+The second method uses the function \textsl{GetIObjectPos()} located in our tools library. This function finds the object pose from 3D-2D point correspondences and returns new rotation and translation vectors. The points used for this method are \textsl{obj\_points} used in the first part and the corners of the current view from the webcam. The new vectors computed by this function are combined and multiplied by dot product with the previous camera matrix to compute the new \textsl{P2\_method2} camera matrix.
+\begin{figure}
+	\centering
+	\includegraphics[scale=0.3]{images/p2_method2.jpg}
+	\caption{Projection of chessboard pattern points to webcam feed with P2\_method2}
+	\label{fig:method2}
+\end{figure}
+
+After finding the new camera matrices we proceed to draw the world coordinate axes in the chessboard pattern and project the 3D cube as seen in \ref{fig:method2}.\newline
+The video file \textsl{CubeProjections.avi} shows the performance of the two homography methods. First \textsl{P2\_method1} is applied, and shown in green circles, and then a switch is made to \textsl{P2\_method2} shown in red circles.
+\newpage

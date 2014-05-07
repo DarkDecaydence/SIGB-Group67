@@ -76,13 +76,15 @@ def texturemapGridSequence():
     mTex,nTex,_ = texture.shape
     texCorners = np.array([[float(nTex), float(mTex)], [float(0.0), float(mTex)], [float(nTex), float(0.0)], [float(0.0), float(0.0)]])
 
+
     #load Tracking data
     running, imgOrig = cap.read()
-    mI,nI,_ = imgOrig.shape
+    mI,nI,_ = cv2.pyrDown(imgOrig).shape
 
     cv2.imshow("win2",imgOrig)
 
     pattern_size = (9, 6)
+    writer = cv2.VideoWriter('GridTexture.avi', cv.CV_FOURCC('D','I','V','3'), 15.0, (nI, mI), True)
 
     idx = [0,8,45,53]
     while(running):
@@ -101,8 +103,9 @@ def texturemapGridSequence():
                 overlay = cv2.warpPerspective(texture, H,(nI, mI))
                 imgOrig = cv2.addWeighted(imgOrig, 0.4, overlay, 0.6, 0)
             cv2.imshow("win2",imgOrig)
+            writer.write(imgOrig)
             cv2.waitKey(1)
-
+    writer.release()
 
 def textureMapGroundFloor():
     fn = "GroundFloorData/sunclipds.avi"
@@ -151,10 +154,10 @@ def realisticTexturemapGroundFloor():
     for i in range(m):
         running, imgOrig = cap.read()
         if running:
-            cv2.imshow("realistic projection", realisticTexturemapLoadHomography(0.1, texPoint[0], ituMap, imgOrig))
+            img = realisticTexturemapLoadHomography(0.1, texPoint[0], ituMap, imgOrig)
+            cv2.imshow("realistic projection", img)
         cv2.waitKey(1)
         break
-    
     cv2.waitKey(0)
 
 def realisticTexturemapLoadHomography(scale, point, map, ground):
@@ -340,6 +343,6 @@ def texturemapObjectSequence():
 #showFloorTrackingData()
 #showImageAndPlot()
 #simpleTextureMap()
-#textureMapGroundFloor()
-realisticTexturemapGroundFloor()
+textureMapGroundFloor()
+#realisticTexturemapGroundFloor()
 #texturemapGridSequence()

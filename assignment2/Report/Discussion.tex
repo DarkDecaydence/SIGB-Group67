@@ -1,0 +1,22 @@
+\section{Discussion}
+	In this section we discuss and interpret the results of each exercise.
+	\subsection{Floor tracking}
+	We observe that the path located on the floor roughly corresponds to the position of the person in the video at all times. We observe a small jitter in the path, which can be explained by a similar effect in the data set.\\
+	As it is assumed that the person is walking on the plane of the floor at all times, we expected a noticeable distortion when the person walks onto the stairs, and thus is raised above the floor. This effect is expected to take place, but is too small to observe. 
+	\subsection{Texture mapping}
+	When projecting a texture onto an arbitrary area of the floor we see results as expected. Due to the method of image overlaying employed the part of the image not covered by the texture is needlessly darkened. This could be prevented by using a different overlaying method.\\
+	Projecting the texture onto the tacked chessboard works rather well. We see some shaking in the texture when the camera moves, and in some frames the texture can not be tracked. Be attribute this to the camera motion applying a motion blur to the images; when this effect grows too large, the algorithm that identifies the chessboard can not locate the sharp edges expected between white and black squares. \\
+	The realistic projection accomplishes its job: the texture is placed on the floor in manner as if it was a rectangular section of the floor itself. The perspective transformation seems to follow the perspective of the camera as well.\\
+	We do observe higher degree of pixelation (more "grainy" image quality) than the arbitrary projection. We attribute this to fact that the texture undergoes two linear transformations rather than one. 
+	\subsection{Camera calibration}
+	We managed to identify the camera matrix for the image sequence rather successfully. \\
+	We observed when experimenting that using only a few frames for calibration (<5) resulted in noticeable distortion effects when applying the calibration. The effects where most clearly visible around the edge of the camera. Choosing particular single frames for calibration could cause the sides of the screen to bulge in or out, and objects close to the edges to be extremely stretched. It was very hard to achieve a similar effect when choosing many (>10) frames for calibration, even when these where picked in an attempt to distort. It was clearly visible that only a few calibration points places unjustified assumptions on the nature of the camera, and using more points increases the probability of estimating a camera matrix that more closely resembles reality. 
+	\subsection{Augmentation}
+	We have implemented both of the two methods in a way such that the movement of the cube follows the movement of the chessboard. As long as the chessboard is held still or moved slowly, and all squares are visible to the camera, the cube can be properly projected.\\
+	We have had some difficulties with getting the points using method 1 to align properly with the chessboard. It appears that the points have the perspective and rotation components correctly applied, but that translation and scaling are incorrect. We have not been able to identify the source of these problems.\\
+	Method 2 seems to work perfectly most of the time, although sudden quick movements seem capable of offsetting the alignment of points a little. We have not been able to figure out what causes this.\\
+	Due to these differences in accuracy we have not been able to properly compare the precision of the two methods, although we have observed that method 2 has a tendency to lower the frame rate to a degree that method 1 does not. Wee conclude from this that method 1 has better performance than method 2. 
+\section{Conclusion}
+	We have been able to solve all the mandatory parts of this assignment in a satisfactory way.\\
+	We have applied knowledge of homographies and linear transformations to solve the problems, and have gotten meaningful results in almost all cases.\\
+	We have experienced some technical problems, most notably in relation to tracking a chessboard pattern correctly. 
