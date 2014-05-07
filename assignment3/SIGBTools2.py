@@ -908,12 +908,17 @@ def getCubePoints(center, size,chessSquare_size):
 def GetFaceNormal(points):
     import numpy as np
     #    print points
-    A=np.subtract([points[0,3],points[1,3],points[2,3]],[points[0,0],points[1,0],points[2,0]])
-    B=np.subtract([points[0,1],points[1,1],points[2,1]],[points[0,0],points[1,0],points[2,0]])
-    normal=cross(A,B)
+    #A = p1 - p0
+    #B = p2 - p0
+#    A=np.subtract([points[3][1],points[3][1],points[3][1]],[points[0][0],points[1][0],points[2][0]])
+#    B=np.subtract([points[0][1],points[1][1],points[2][1]],[points[0][0],points[1][0],points[2][0]])
+    A=np.subtract([points[1][0],points[1][1], 1],[points[0][0],points[0][1], 1])
+    B=np.subtract([points[2][0],points[2][1], 1],[points[0][0],points[0][1], 1])
+    normal=cross(B,A)
     normal = normal/np.linalg.norm(normal)
     #    print "normal: ",normal
     return normal
+
 def getNormalsInCubeCorners(TopFace,RightFace,LeftFace,UpFace,DownFace):
 
     """ Creates a list of points for plotting
