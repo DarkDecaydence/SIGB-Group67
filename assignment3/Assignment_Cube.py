@@ -176,11 +176,85 @@ def removeHiddenFacesAngle(faceNormal, cameraMatrix):
         return False
     return True
 
+def ShadeFace(image,points,faceCorner_Normals, camera):
+    global shadeRes
+    shadeRes=10
+    videoHeight, videoWidth, vd = array(image).shape
+    #................................
+    points_Proj=camera.project(toHomogenious(points))
+    points_Proj1 = np.array([[int(points_Proj[0,0]),int(points_Proj[1,0])],[int(points_Proj[0,1]),\
+        int(points_Proj[1,1])],[int(points_Proj[0,3]),int(points_Proj[1,3])],[int(points_Proj[0,2]),int(points_Proj[1,2])]])
+    #................................
+    square = np.array([[0, 0], [shadeRes-1, 0], [shadeRes-1, shadeRes-1], [0, shadeRes-1]])
+    #................................
+    H = estimateHomography(square, points_Proj1)
+    #................................
+    Mr0,Mg0,Mb0=CalculateShadeMatrix(image,shadeRes,points,faceCorner_Normals, camera)
+    # HINT
+    # type(Mr0): <type 'numpy.ndarray'>
+    # Mr0.shape: (shadeRes, shadeRes)
+    #................................
+    Mr = cv2.warpPerspective(Mr0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    Mg = cv2.warpPerspective(Mg0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    Mb = cv2.warpPerspective(Mb0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    #................................
+    image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    [r,g,b]=cv2.split(image)
+    #................................
+    whiteMask = np.copy(r)
+    whiteMask[:,:]=[0]
+    points_Proj2=[]
+    points_Proj2.append([int(points_Proj[0,0]),int(points_Proj[1,0])])
+    points_Proj2.append([int(points_Proj[0,1]),int(points_Proj[1,1])])
+    points_Proj2.append([int(points_Proj[0,3]),int(points_Proj[1,3])])
+    points_Proj2.append([int(points_Proj[0,2]),int(points_Proj[1,2])])
+    cv2.fillConvexPoly(whiteMask,array(points_Proj2),(255,255,255))
+    #................................
+    r[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),r[nonzero(whiteMask>0)]*Mr[nonzero(whiteMask>0)])
+    g[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),g[nonzero(whiteMask>0)]*Mg[nonzero(whiteMask>0)])
+    b[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),b[nonzero(whiteMask>0)]*Mb[nonzero(whiteMask>0)])
+    #................................
+    image=cv2.merge((r,g,b))
+    image=cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    return image
 
-def update(img, writer=None, record=False):
+def CalculateShadeMatrix(image,shadeRes,points,faceCorner_Normals, camera):
+    #Ambient light IA=[IaR,IaG,IaB]
+    IA = np.matrix([5.0, 5.0, 5.0]).T
+    #Point light IA=[IpR,IpG,IpB]
+    IP = np.matrix([2.0, 2.0, 2.0]).T
+    #Light Source Attenuation
+    fatt = 2
+    #Material properties: e.g., Ka=[kaR; kaG; kaB]
+    ka=np.matrix([0.2, 0.2, 0.2]).T
+    kd= np.matrix([0.3, 0.3, 0.3]).T
+    ks=np.matrix([0.7, 0.7, 0.7]).T
+    alpha = 100
+    
+    mat = [None, None, None]
+    lightPos = np.array(camera.c.flat)
+    camPos = np.array(camera.c.flat)
+    
+    for ch in range(3):
+        mat[ch] = np.zeros((shadeRes, shadeRes))
+        for x in range(shadeRes):
+            for y in range(shadeRes):
+                viewPoint = np.array(BilinearInterpo(shadeRes, x, y, points, True))
+                lightDirec = viewPoint - lightPos
+                lightDirec /= np.linalg.norm(lightDirec)
+                viewDirec = viewPoint - camPos
+                viewDirec /= np.linalg.norm(viewDirec)
+                normal = np.array(BilinearInterpo(shadeRes, x, y, faceCorner_Normals, True))
+                reflect = lightDirec - 2 * dot(lightDirec, normal) * normal
+                mat[ch][x, y] = (IA[ch] * kd[ch] * max(dot(normal, lightDirec), 0)) + (IP[ch] * ks[ch] * (max(dot(reflect, viewDirec) ** fatt, 0)))
+    
+    return (mat[0], mat[1], mat[2])
+
+
+def update(img, record=False):
     global cubeDefined, topFace, downFace, leftFace, rightFace, upFace, P2_method1, P2_method2, currentMethod
     global drawTopFace, drawDownFace, drawLeftFace, drawRightFace, drawUpFace
-
+    global writer
     
     image=copy(img)
     if Undistorting:  #Use previous stored camera matrix and distortion coefficient to undistort the image
@@ -256,7 +330,7 @@ def update(img, writer=None, record=False):
             if ShowText:
                 ''' <011> Here show the distance between the camera origin and the world origin in the image''' 
                 
-                if method == 1:
+                if methodNo == 1:
                     K = P2_method1[:, :3]
                     T = P2_method1[:, 3:]
                 else:
@@ -278,16 +352,27 @@ def update(img, writer=None, record=False):
 
                 if(cubeDefined):
                     ''' <010> Here Do he texture mapping and draw the texture on the faces of the cube'''
+                    TopFaceCornerNormals,RightFaceCornerNormals,LeftFaceCornerNormals,UpFaceCornerNormals,DownFaceCornerNormals = \
+                        CalculateFaceCornerNormals(topFace[0],rightFace[0],leftFace[0],upFace[0],downFace[0])
+                    cam = Camera(P2_method1 if methodNo == 1 else P2_method2)
+                    cam.factor()
+                    cam.center()
+                    
                     if(drawTopFace):
                         image = TextureFace(image, topFace, currentMethod, "Images/Top.jpg")
-                    if(drawDownFace):
-                        image = TextureFace(image, downFace, currentMethod, "Images/Down.jpg")
-                    if(drawLeftFace):
-                        image = TextureFace(image, leftFace, currentMethod, "Images/Left.jpg")
+                        image=ShadeFace(image, topFace[0].T, TopFaceCornerNormals, cam)
                     if(drawRightFace):
                         image = TextureFace(image, rightFace, currentMethod, "Images/Right.jpg")
+                        image=ShadeFace(image, rightFace[0].T, RightFaceCornerNormals, cam)
+                    if(drawLeftFace):
+                        image = TextureFace(image, leftFace, currentMethod, "Images/Left.jpg")
+                        image=ShadeFace(image, leftFace[0].T, LeftFaceCornerNormals, cam)
                     if(drawUpFace):
                         image = TextureFace(image, upFace, currentMethod, "Images/Up.jpg")
+                        image=ShadeFace(image, upFace[0].T, UpFaceCornerNormals, cam)
+                    if(drawDownFace):
+                        image = TextureFace(image, downFace, currentMethod, "Images/Down.jpg")
+                        image=ShadeFace(image, downFace[0].T, DownFaceCornerNormals, cam)
 
                     ''' <012>  calculate the normal vectors of the cube faces and draw these normal vectors on the center of each face'''
                     topFaceNormal = calculateNormals(image, topFace, currentMethod)
@@ -325,7 +410,7 @@ def update(img, writer=None, record=False):
                     point = [point[0], point[1], point[2], 1]
                     point = np.dot(currentMethod, point)
                     center = (int(point[0]/point[2]), int(point[1]/point[2]))
-                    cv2.circle(image, center, 5, (0,255,0), -1)
+                    #cv2.circle(image, center, 5, (0,255,0), -1)
                 ''' <008> Here Draw the world coordinate system in the image'''            
                 # topLeft,topRight,bottomLeft,bottomRight
                 topLeft, topRight, bottomLeft, bottomRight = getWorldCoordinateSystem(currentCorners)
@@ -412,7 +497,7 @@ def run(speed,video):
 
 
     image, isSequenceOK = getImageSequence(capture,speed)
-    print isSequenceOK
+    
     H,W,_ = image.shape
     record = False
 
@@ -420,7 +505,9 @@ def run(speed,video):
         update(image)
         printUsage()
     
-    #writer = cv2.VideoWriter('CubeProjections.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
+    global writer
+    writer = cv2.VideoWriter('Cube_Projection.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
+    
     while(isSequenceOK):
         OriginalImage=copy(image)
      
@@ -510,10 +597,10 @@ def run(speed,video):
             print "recording..." if record else "stopped recording"
            
         if (speed>0):
-            update(image, None, record)
+            update(image, record)
             image, isSequenceOK = getImageSequence(capture,speed)
 
-    #writer.release()
+    writer.release()
 
 
 def firstPart():
@@ -582,6 +669,7 @@ global cubeDefined
 global Kt
 global imgPointsFirst
 global methodNo
+global writer
 ###
 #
 #instead of having IF's every time we use method1|method2 ---> currentMethod holds P2_method1 or P2method_2
