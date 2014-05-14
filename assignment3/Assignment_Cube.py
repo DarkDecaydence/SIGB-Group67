@@ -256,7 +256,7 @@ def update(img, writer=None, record=False):
             if ShowText:
                 ''' <011> Here show the distance between the camera origin and the world origin in the image''' 
                 
-                if method == 1:
+                if methodNo == 1:
                     K = P2_method1[:, :3]
                     T = P2_method1[:, 3:]
                 else:
