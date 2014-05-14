@@ -9,6 +9,7 @@ from pylab import *
 from scipy import linalg
 import cv2
 import cv2.cv as cv
+import math
 from SIGBTools2 import *
 
 VideoFile = "Pattern.avi"
@@ -133,7 +134,15 @@ def update(img, writer=None, record=False):
             if ShowText:
                 ''' <011> Here show the distance between the camera origin and the world origin in the image'''                    
                 
-                cv2.putText(image,str("frame:" + str(frameNumber)), (20,10),cv2.FONT_HERSHEY_PLAIN,1, (255, 255, 255))#Draw the text
+                if method == 1:
+                    K = P2_method1[:, :3]
+                    T = P2_method1[:, 3:]
+                else:
+                    K = P2_method2[:, :3]
+                    T = P2_method2[:, 3:]
+                camPos = dot(-(matrix(K).I), T)
+                camDist = math.sqrt(camPos[0]**2 + camPos[1]**2 + camPos[2]**2)
+                cv2.putText(image,str("frame: " + str(frameNumber)) + "\n origin distance: " + str(camDist), (20,30),cv2.FONT_HERSHEY_PLAIN,2, (255, 255, 255))#Draw the text
 
             if TextureMap:
 
@@ -480,7 +489,7 @@ def secondPart():
 
 '''-------variables------'''
 global cameraMatrix
-global P2_method1    
+global P2_method1
 global P2_method2
 global distortionCoeff
 global homographyPoints
@@ -515,6 +524,11 @@ drawDownFace = False
 drawLeftFace = False
 drawRightFace = False
 drawUpFace = False
+
+P2_method1 = np.zeros((3, 4))
+P2_method1[:, :3] = np.identity(3)
+P2_method2 = np.zeros((3, 4))
+P2_method2[:, :3] = np.identity(3)
 
 '''-------defining the cube------'''
      
