@@ -9,9 +9,11 @@ from pylab import *
 from scipy import linalg
 import cv2
 import cv2.cv as cv
+import math
 from SIGBTools2 import *
+#from SIGBTools2 import camera
 
-VideoFile = "Pattern.avi"
+VideoFile = "CubeProjections.avi"
 
 def DrawLines(img, points):
     for i in range(1, 17):                
@@ -49,12 +51,41 @@ def getWorldCoordinateSystem(corners):
     bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
     return topLeft,topRight,bottomLeft,bottomRight
  
-def TextureFace(image, face, cameraMatrix, imageUrl):
+'''
+- places a texture in a cube face
+- image: current image; faceVertices: points of the cube face; 
+        projMethod: current projection method; imageUrl: url for image to texture
+- texturing: 
+1) project cube points
+2) Homography from texture to cube points
+3) warp image with homography
+4) enhance color of face with a mask (overlay from warp) and bit operations (AND then OR)
+- returns: image with texture in cube face
+'''
+def TextureFace(image, faceVertices, projMethod, imageUrl):
+    face = []
+    faceVertices = faceVertices[0]
+    #project points before drawing texture
+    for point in faceVertices:
+        #print "point", point
+        point = [point[0], point[1], point[2], 1]
+        point = np.dot(projMethod, point)
+        face.append((int(point[0]/point[2]), int(point[1]/point[2])))
+    face = np.array(face)
+    #print face
+    cv2.drawContours(image, [face], -1, (255, 0, 255), 1)
+
+    ######## - to find out which points are which
+    ##if(imageUrl == "Images/Right.jpg"):#      B  G  R
+    ##    cv2.circle(image, tuple(face[0]), 5, (0,0,255), -1)
+    ##    cv2.circle(image, tuple(face[1]), 5, (0,255,0), -1)
+    ##    cv2.circle(image, tuple(face[2]), 5, (255,0,0), -1)
+    ##    cv2.circle(image, tuple(face[3]), 5, (255,255,255), -1)
+    ########
     faceImage = cv2.imread(imageUrl)
     faceImageH, faceImageW,_ = faceImage.shape
     #get image points to calculate H
     faceImagePoints = [[0,0],[0,faceImageW],[faceImageH,0], [faceImageW,faceImageH]]
-    face = face[0]
     H = estimateHomography(faceImagePoints, face)
     h, w, _ = image.shape
     #overlay is going to work as a mask to enhance the warpPerspective
@@ -70,34 +101,160 @@ def TextureFace(image, face, cameraMatrix, imageUrl):
     image = cv2.bitwise_or(temp, overlay)
     return image
 
-def calculateNormals(image, face):
+'''
+- calculates the normals of cube faces
+- image: current image; face: cube face; projMethod: method being used to project points -> P2_method1|P2_method2
+- projects and draws a vector from the center of the cube along the normal
+- returns: normal of the face
+'''
+def calculateNormals(image, face, projMethod):
     face = face[0]
     #re-arrange points to have them in counterclockwise order
-    face = np.array([face[0],face[1], face[3], face[2]])
+    face = np.array([face[2],face[3], face[1], face[0]])
     #to find center of face
-    x, y = zip(*face)
+    x, y, z = zip(*face)
     faceNormal = GetFaceNormal(face)
-    faceNormal = faceNormal*25    
     #point 1 = center of face
-    point1 = tuple( ( int((max(x)+min(x) )/2), int((max(y)+min(y))/2) ))
-    #point 2 = normal
-    point2 = tuple(( int( faceNormal[2]+point1[0]) , int(faceNormal[2]+point1[1]) ))
-    cv2.line(image, point1, point2, (255,255,255), 3)
+    point1 = ( int((max(x)+min(x) )/2), int((max(y)+min(y))/2), int((max(z)+min(z))/2), 1)
+    point1_projected = np.dot(projMethod, point1)
+    point1_projected = ( int(point1_projected[0]/point1_projected[2]) , int(point1_projected[1]/point1_projected[2]) )
+    #point 2 = along normal
+    point2 = ( int( faceNormal[0]+point1[0]) , int(faceNormal[1]+point1[1]), int(faceNormal[2]+point1[2]), 1)
+    point2_projected = np.dot(projMethod, point2)
+    point2_projected = ( int(point2_projected[0]/point2_projected[2]) , int(point2_projected[1]/point2_projected[2]) )
+    cv2.line(image, tuple(point1_projected), tuple(point2_projected), (255,0,255), 2)
+    cv2.circle(image, point2_projected, 3, (255,0,255), -1)
+    
     return faceNormal
 
-def removeHiddenFaces(faceNormal):
-    # V*N > 0 -> Hide
-    V = np.array([0,0,-1]).T
+'''
+- calculates the dotProduct between V and N
+- V: center of the camera vector
+- N: normal of the cube face
+- returns: boolean -> true=show, false=hide
+'''
+def removeHiddenFacesDotProduct(faceNormal, cameraMatrix):
+    global cameraCenter
+    cam = Camera(cameraMatrix)
+    cameraCenter = cam.center()
+    V = np.array(cameraCenter)*-1
     dot = np.dot(faceNormal, V)
-    #print dot
+    # V*N > 0 -> Hide
     if(dot > 0):
         return False
     return True
 
-def update(img, writer=None, record=False):
-    global cubeDefined, topFace, downFace, leftFace, rightFace, upFace, P2_method1, P2_method2
-    global drawTopFace, drawDownFace, drawLeftFace, drawRightFace, drawUpFace
+'''
+- calculates angle between v1 and v2
+- returns angle in radians
+'''
+def getAngle(v1, v2):
+    product = np.dot(v1, v2)
+    norms = ( np.linalg.norm(v1) *np.linalg.norm(v2))
+    return np.arccos(product / norms)
+  
+'''
+- calculates the angle between V and N
+- V: center of the camera vector
+- N: normal of the cube face
+- returns: boolean -> true=show, false=hide
+'''
+def removeHiddenFacesAngle(faceNormal, cameraMatrix):
 
+    global cameraCenter
+    cam = Camera(cameraMatrix)
+    ##
+    # SIGBTools2.Camera.center() returns the center of the camera  
+    ##
+    cameraCenter = cam.center()
+    V = np.array(cameraCenter)
+    angle = getAngle(faceNormal, V)
+    ##
+    # angles returned in radians
+    ##
+    if(angle > np.pi/2):
+        return False
+    return True
+
+def ShadeFace(image,points,faceCorner_Normals, camera):
+    global shadeRes
+    shadeRes=10
+    videoHeight, videoWidth, vd = array(image).shape
+    #................................
+    points_Proj=camera.project(toHomogenious(points))
+    points_Proj1 = np.array([[int(points_Proj[0,0]),int(points_Proj[1,0])],[int(points_Proj[0,1]),\
+        int(points_Proj[1,1])],[int(points_Proj[0,3]),int(points_Proj[1,3])],[int(points_Proj[0,2]),int(points_Proj[1,2])]])
+    #................................
+    square = np.array([[0, 0], [shadeRes-1, 0], [shadeRes-1, shadeRes-1], [0, shadeRes-1]])
+    #................................
+    H = estimateHomography(square, points_Proj1)
+    #................................
+    Mr0,Mg0,Mb0=CalculateShadeMatrix(image,shadeRes,points,faceCorner_Normals, camera)
+    # HINT
+    # type(Mr0): <type 'numpy.ndarray'>
+    # Mr0.shape: (shadeRes, shadeRes)
+    #................................
+    Mr = cv2.warpPerspective(Mr0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    Mg = cv2.warpPerspective(Mg0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    Mb = cv2.warpPerspective(Mb0, H, (videoWidth, videoHeight),flags=cv2.INTER_LINEAR)
+    #................................
+    image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    [r,g,b]=cv2.split(image)
+    #................................
+    whiteMask = np.copy(r)
+    whiteMask[:,:]=[0]
+    points_Proj2=[]
+    points_Proj2.append([int(points_Proj[0,0]),int(points_Proj[1,0])])
+    points_Proj2.append([int(points_Proj[0,1]),int(points_Proj[1,1])])
+    points_Proj2.append([int(points_Proj[0,3]),int(points_Proj[1,3])])
+    points_Proj2.append([int(points_Proj[0,2]),int(points_Proj[1,2])])
+    cv2.fillConvexPoly(whiteMask,array(points_Proj2),(255,255,255))
+    #................................
+    r[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),r[nonzero(whiteMask>0)]*Mr[nonzero(whiteMask>0)])
+    g[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),g[nonzero(whiteMask>0)]*Mg[nonzero(whiteMask>0)])
+    b[nonzero(whiteMask>0)]=map(lambda x: max(min(x,255),0),b[nonzero(whiteMask>0)]*Mb[nonzero(whiteMask>0)])
+    #................................
+    image=cv2.merge((r,g,b))
+    image=cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    return image
+
+def CalculateShadeMatrix(image,shadeRes,points,faceCorner_Normals, camera):
+    #Ambient light IA=[IaR,IaG,IaB]
+    IA = np.matrix([5.0, 5.0, 5.0]).T
+    #Point light IA=[IpR,IpG,IpB]
+    IP = np.matrix([2.0, 2.0, 2.0]).T
+    #Light Source Attenuation
+    fatt = 2
+    #Material properties: e.g., Ka=[kaR; kaG; kaB]
+    ka=np.matrix([0.2, 0.2, 0.2]).T
+    kd= np.matrix([0.3, 0.3, 0.3]).T
+    ks=np.matrix([0.7, 0.7, 0.7]).T
+    alpha = 100
+    
+    mat = [None, None, None]
+    lightPos = np.array(camera.c.flat)
+    camPos = np.array(camera.c.flat)
+    
+    for ch in range(3):
+        mat[ch] = np.zeros((shadeRes, shadeRes))
+        for x in range(shadeRes):
+            for y in range(shadeRes):
+                viewPoint = np.array(BilinearInterpo(shadeRes, x, y, points, True))
+                lightDirec = viewPoint - lightPos
+                lightDirec /= np.linalg.norm(lightDirec)
+                viewDirec = viewPoint - camPos
+                viewDirec /= np.linalg.norm(viewDirec)
+                normal = np.array(BilinearInterpo(shadeRes, x, y, faceCorner_Normals, True))
+                reflect = lightDirec - 2 * dot(lightDirec, normal) * normal
+                mat[ch][x, y] = (IA[ch] * kd[ch] * max(dot(normal, lightDirec), 0)) + (IP[ch] * ks[ch] * (max(dot(reflect, viewDirec) ** fatt, 0)))
+    
+    return (mat[0], mat[1], mat[2])
+
+
+def update(img, record=False):
+    global cubeDefined, topFace, downFace, leftFace, rightFace, upFace, P2_method1, P2_method2, currentMethod
+    global drawTopFace, drawDownFace, drawLeftFace, drawRightFace, drawUpFace
+    global writer
     
     image=copy(img)
     if Undistorting:  #Use previous stored camera matrix and distortion coefficient to undistort the image
@@ -125,110 +282,139 @@ def update(img, writer=None, record=False):
             fVPoints = [] 
             fVPoints = getOuterPoints(cornersFV)
             H_fv_cv = np.array(estimateHomography(fVPoints, currentViewPoints))
-            
+            ##
+            #
+            #Changed order
+            # Before: For some reason the methods where calculated after inside if(ProjectPattern)
+            # After: Method is defined before everything and put in currentMethod (global)
+            #
+            ##
             ''' <006> Here Define the cameraMatrix P=K[R|t] of the current frame'''
             H_fv_pattern = np.load("numpyData/H_ff_pattern.npy")
             H_cv_pattern = np.dot( H_fv_pattern, H_fv_cv)
-           
-            if ShowText:
-                ''' <011> Here show the distance between the camera origin and the world origin in the image'''                    
+            pattern_size=(9,6)
+            pattern_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
+            pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
+            pattern_points *= chessSquare_size
+            
+            if methodNo == 1 :
+                #break down K[R|t]
+                camera_matrix = dot(cameraMatrix, Kt)
+                K, _ = rq(camera_matrix[:,:3])
+                # make diagonal of K positive
+                T = diag(sign(diag(K)))
+                K = dot(K,T)
                 
-                cv2.putText(image,str("frame:" + str(frameNumber)), (20,10),cv2.FONT_HERSHEY_PLAIN,1, (255, 255, 255))#Draw the text
+                K_inv = np.linalg.inv(K)
+                P2_method1 = np.zeros((3,4))
+                P2_method1 = np.dot(H_cv_pattern, camera_matrix)
+                Kt_temp = np.dot(K_inv, P2_method1[:,:3])
+                Kt_temp = array([Kt_temp[:,0], Kt_temp[:,1], cross(Kt_temp[:,0], Kt_temp[:,1])]).T
+                P2_method1[:,:3] = np.dot(K, Kt_temp)
+                currentMethod = P2_method1
+            elif methodNo == 2 :    
+                obj_points = [pattern_points]
+                obj_points.append(pattern_points)
+                obj_points = np.array(obj_points,np.float64).T
+                obj_points=obj_points[:,:,0].T
+                #get new rotation and traslation vecs
+                found,rvecs_new,tvecs_new = GetObjectPos(obj_points, currentCorners, cameraMatrix, distortionCoeff)
+                #global P2_method2 
+                P2_method2 = np.zeros((3, 4))
+                if found == True:
+                    rot, _ = cv2.Rodrigues(rvecs_new)
+                    P2_method2[:, :3] = rot
+                    P2_method2[:, 3:] = tvecs_new
+                    P2_method2 = dot(cameraMatrix, P2_method2)
+                currentMethod = P2_method2
+            if ShowText:
+                ''' <011> Here show the distance between the camera origin and the world origin in the image''' 
+                
+                if methodNo == 1:
+                    K = P2_method1[:, :3]
+                    T = P2_method1[:, 3:]
+                else:
+                    K = P2_method2[:, :3]
+                    T = P2_method2[:, 3:]
+                camPos = dot(-(matrix(K).I), T)
+                camDist = math.sqrt(camPos[0]**2 + camPos[1]**2 + camPos[2]**2)
+                cv2.putText(image,str("frame: " + str(frameNumber)) + "\n origin distance: " + str(camDist), (20,30),cv2.FONT_HERSHEY_PLAIN,2, (255, 255, 255))#Draw the text
 
             if TextureMap:
+                ###
+                #
+                # Changed structure
+                # Before: <010> and <012>, both in separate if(cubeDefined)
+                # After: <010> and <012> included inside a same if(cubeDefined)
+                #*****tried <012> before <010> but since normals where drawn before the textures they got ocluded
+                #
+                ### 
 
-                ''' <010> Here Do he texture mapping and draw the texture on the faces of the cube'''
                 if(cubeDefined):
-                    if(method == 1):
-                        if(drawTopFace):
-                            image = TextureFace(image, topFace, P2_method1, "Images/Top.jpg")
-                        if(drawDownFace):
-                            image = TextureFace(image, downFace, P2_method1, "Images/Down.jpg")
-                        if(drawLeftFace):
-                            image = TextureFace(image, leftFace, P2_method1, "Images/Left.jpg")
-                        if(drawRightFace):
-                            image = TextureFace(image, rightFace, P2_method1, "Images/Right.jpg")
-                        if(drawUpFace):
-                            image = TextureFace(image, upFace, P2_method1, "Images/Up.jpg")
-                    else:
-                        if(drawTopFace):
-                            image = TextureFace(image, topFace, P2_method2, "Images/Top.jpg")
-                        if(drawDownFace):
-                            image = TextureFace(image, downFace, P2_method2, "Images/Down.jpg")
-                        if(drawLeftFace):
-                            image = TextureFace(image, leftFace, P2_method2, "Images/Left.jpg")
-                        if(drawRightFace):
-                            image = TextureFace(image, rightFace, P2_method2, "Images/Right.jpg")
-                        if(drawUpFace):
-                            image = TextureFace(image, upFace, P2_method2, "Images/Up.jpg")
+                    ''' <010> Here Do he texture mapping and draw the texture on the faces of the cube'''
+                    TopFaceCornerNormals,RightFaceCornerNormals,LeftFaceCornerNormals,UpFaceCornerNormals,DownFaceCornerNormals = \
+                        CalculateFaceCornerNormals(topFace[0],rightFace[0],leftFace[0],upFace[0],downFace[0])
+                    cam = Camera(P2_method1 if methodNo == 1 else P2_method2)
+                    cam.factor()
+                    cam.center()
+                    
+                    if(drawTopFace):
+                        image = TextureFace(image, topFace, currentMethod, "Images/Top.jpg")
+                        image=ShadeFace(image, topFace[0].T, TopFaceCornerNormals, cam)
+                    if(drawRightFace):
+                        image = TextureFace(image, rightFace, currentMethod, "Images/Right.jpg")
+                        image=ShadeFace(image, rightFace[0].T, RightFaceCornerNormals, cam)
+                    if(drawLeftFace):
+                        image = TextureFace(image, leftFace, currentMethod, "Images/Left.jpg")
+                        image=ShadeFace(image, leftFace[0].T, LeftFaceCornerNormals, cam)
+                    if(drawUpFace):
+                        image = TextureFace(image, upFace, currentMethod, "Images/Up.jpg")
+                        image=ShadeFace(image, upFace[0].T, UpFaceCornerNormals, cam)
+                    if(drawDownFace):
+                        image = TextureFace(image, downFace, currentMethod, "Images/Down.jpg")
+                        image=ShadeFace(image, downFace[0].T, DownFaceCornerNormals, cam)
 
-                ''' <012>  calculate the normal vectors of the cube faces and draw these normal vectors on the center of each face'''
-                if(cubeDefined):
-                    topFaceNormal = calculateNormals(image, topFace)
-                    downFaceNormal = calculateNormals(image, downFace)
-                    leftFaceNormal = calculateNormals(image, leftFace)
-                    rightFaceNormal = calculateNormals(image, rightFace)
-                    upFaceNormal = calculateNormals(image, upFace)
+                    ''' <012>  calculate the normal vectors of the cube faces and draw these normal vectors on the center of each face'''
+                    topFaceNormal = calculateNormals(image, topFace, currentMethod)
+                    downFaceNormal = calculateNormals(image, downFace, currentMethod)
+                    leftFaceNormal = calculateNormals(image, leftFace, currentMethod)
+                    rightFaceNormal = calculateNormals(image, rightFace, currentMethod)
+                    upFaceNormal = calculateNormals(image, upFace, currentMethod)
                     ''' <013> Here Remove the hidden faces'''
                     #draw___Face = boolean to "hide" faces
-                    drawTopFace = removeHiddenFaces(topFaceNormal)
-                    drawDownFace = removeHiddenFaces(downFaceNormal)
-                    drawLeftFace = removeHiddenFaces(leftFaceNormal)
-                    drawRightFace = removeHiddenFaces(rightFaceNormal)
-                    drawUpFace = removeHiddenFaces(upFaceNormal)
-                                        
+                    ##drawTopFace = removeHiddenFacesDotProduct(topFaceNormal, currentMethod)
+                    ##drawDownFace = removeHiddenFacesDotProduct(downFaceNormal, currentMethod)
+                    ##drawLeftFace = removeHiddenFacesDotProduct(leftFaceNormal, currentMethod)
+                    ##drawRightFace = removeHiddenFacesDotProduct(rightFaceNormal, currentMethod)
+                    ##drawUpFace = removeHiddenFacesDotProduct(upFaceNormal, currentMethod)
+
+                    drawTopFace = removeHiddenFacesAngle(topFaceNormal, currentMethod)
+                    drawDownFace = removeHiddenFacesAngle(downFaceNormal, currentMethod)
+                    drawLeftFace = removeHiddenFacesAngle(leftFaceNormal, currentMethod)
+                    drawRightFace = removeHiddenFacesAngle(rightFaceNormal, currentMethod)
+                    drawUpFace = removeHiddenFacesAngle(upFaceNormal, currentMethod)
+
             if ProjectPattern:                  
-                ''' <007> Here Test the camera matrix of the current view by projecting the pattern points''' 
-                pattern_size=(9,6)
-                pattern_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
-                pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
-                pattern_points *= chessSquare_size
+                ''' <007> Here Test the camera matrix of the current view by projecting the pattern points'''
+                #draw chessboard pattern points using currentMethod
+                ###
+                #
+                # Changed order
+                # Before: here the projection method was calculated
+                # After: projection method calculated before, 
+                #        here only projection of pattern_points with currentMethod
+                #
+                ### 
                 
-                if method == 1 :
-                    #break down K[R|t]
-                    camera_matrix = dot(cameraMatrix, Kt)
-                    K, _ = rq(camera_matrix[:,:3])
-                    # make diagonal of K positive
-                    T = diag(sign(diag(K)))
-                    K = dot(K,T)
-                    
-                    K_inv = np.linalg.inv(K)
-                    P2_method1 = np.zeros((3,4))
-                    P2_method1 = np.dot(H_cv_pattern, camera_matrix)
-                    Kt_temp = np.dot(K_inv, P2_method1[:,:3])
-                    Kt_temp = array([Kt_temp[:,0], Kt_temp[:,1], cross(Kt_temp[:,0], Kt_temp[:,1])]).T
-                    P2_method1[:,:3] = np.dot(K, Kt_temp)
-                    #draw chessboard pattern points using method1
-                    for point in pattern_points:
-                        point = array([point[0], point[1], point[2], 1])
-                        point = np.dot(P2_method1, point)
-                        center = (int(point[0]/point[2]), int(point[1]/point[2]))
-                        cv2.circle(image, center, 2, (0,0,255), -1)
-                    
-                elif method == 2 :    
-                    obj_points = [pattern_points]
-                    obj_points.append(pattern_points)
-                    obj_points = np.array(obj_points,np.float64).T
-                    obj_points=obj_points[:,:,0].T
-                    #get new rotation and traslation vecs
-                    found,rvecs_new,tvecs_new = GetObjectPos(obj_points, currentCorners, cameraMatrix, distortionCoeff)
-                    #global P2_method2 
-                    P2_method2 = np.zeros((3, 4))
-                    if found == True:
-                        rot, _ = cv2.Rodrigues(rvecs_new)
-                        P2_method2[:, :3] = rot
-                        P2_method2[:, 3:] = tvecs_new
-                        P2_method2 = dot(cameraMatrix, P2_method2)
-                        #draw chessboard pattern points using method2
-                    for point in pattern_points:
-                        point = [point[0], point[1], point[2], 1]
-                        point = np.dot(P2_method2, point)
-                        center = (int(point[0]/point[2]), int(point[1]/point[2]))
-                        cv2.circle(image, center, 5, (0,255,0), -1)
+                for point in pattern_points:
+                    point = [point[0], point[1], point[2], 1]
+                    point = np.dot(currentMethod, point)
+                    center = (int(point[0]/point[2]), int(point[1]/point[2]))
+                    #cv2.circle(image, center, 5, (0,255,0), -1)
                 ''' <008> Here Draw the world coordinate system in the image'''            
                 # topLeft,topRight,bottomLeft,bottomRight
                 topLeft, topRight, bottomLeft, bottomRight = getWorldCoordinateSystem(currentCorners)
-                
+                #draw world coordinate system axis in top left of chessboard pattern
                 cv2.line(image, topLeft, topRight, (255,0,0), 2)
                 cv2.line(image, topLeft, bottomLeft, (0,255,0), 2)
                 cv2.line(image, topLeft, bottomRight, (0,0,255), 2)
@@ -238,48 +424,36 @@ def update(img, writer=None, record=False):
                 cv2.circle(image, bottomRight, 5, (0,0,255), -1)
                     
             if WireFrame:                      
-                ''' <009> Here Project the box into the current camera image and draw the box edges''' 
+                ''' <009> Here Project the box into the current camera image and draw the box edges'''
+                ###
+                #
+                # The cube is no more projected here. The new projection is made in TextureFace(). 
+                # The contours are also drawn in TextureFace()
+                # Changed cube points, now it's more centered
+                #
+                ### 
                 #using this cube because the given cube is difficult to understand
-                tempCube = np.float32([[0,0,-4],
-                                       [0,4,-4],
-                                       [4,4,-4],
-                                       [4,0,-4],
+                tempCube = np.float32([[2,2,-4],#0
+                                       [2,6,-4],#1
+                                       [6,6,-4],#2
+                                       [6,2,-4],#3
                                        
-                                       [0,0,0], 
-                                       [0,4,0], 
-                                       [4,4,0], 
-                                       [4,0,0]])
+                                       [2,2,0],#4 
+                                       [2,6,0],#5 
+                                       [6,6,0],#6 
+                                       [6,2,0]])#7
                 tempContour = []
-                #project cube points with present method
-                for point in tempCube:
-                    point = [point[0], point[1], point[2], 1]
-                    if method == 1 :
-                        point = np.dot(P2_method1, point)
-                    else :
-                        point = np.dot(P2_method2, point)
-                    tempContour.append((int(point[0]/point[2]), int(point[1]/point[2])))
-                tempContour = np.array(tempContour)
-                #global topFace,downFace,leftFace, rightFace,upFace
                 topFace = []
                 downFace = []
                 leftFace = []
                 rightFace = [] 
                 upFace = []
-                #break points into faces
-                #weird indexes to have them in order
-                topFace.append(np.array([ tempContour[0], tempContour[1], tempContour[3], tempContour[2] ]))
-                downFace.append(np.array([ tempContour[6], tempContour[2], tempContour[5], tempContour[1] ]))
-                leftFace.append(np.array([ tempContour[4], tempContour[5], tempContour[0], tempContour[1] ]))
-                rightFace.append(np.array([ tempContour[3], tempContour[2], tempContour[7], tempContour[6] ]))
-                upFace.append(np.array([ tempContour[4], tempContour[0], tempContour[7], tempContour[3] ]))
+                topFace.append(np.array([ tempCube[0], tempCube[1], tempCube[3], tempCube[2] ]))
+                downFace.append(np.array([ tempCube[6], tempCube[2], tempCube[5], tempCube[1] ]))
+                leftFace.append(np.array([ tempCube[4], tempCube[5], tempCube[0], tempCube[1] ]))
+                rightFace.append(np.array([ tempCube[3], tempCube[2], tempCube[7], tempCube[6] ]))
+                upFace.append(np.array([ tempCube[4], tempCube[0], tempCube[7], tempCube[3] ]))
                 cubeDefined = True
-                #draw cube faces
-                cv2.drawContours(image, topFace, -1, (255, 0, 255), 1)
-                cv2.drawContours(image, downFace, -1, (255, 0, 255), 1)
-                cv2.drawContours(image, leftFace, -1, (255, 0, 255), 1)
-                cv2.drawContours(image, rightFace, -1, (255, 0, 255), 1)
-                cv2.drawContours(image, upFace, -1, (255, 0, 255), 1)
-                    
                     
     cv2.namedWindow('grid')
     cv2.imshow('grid', cv2.pyrDown(image))
@@ -323,7 +497,7 @@ def run(speed,video):
 
 
     image, isSequenceOK = getImageSequence(capture,speed)
-    print isSequenceOK
+    
     H,W,_ = image.shape
     record = False
 
@@ -331,7 +505,9 @@ def run(speed,video):
         update(image)
         printUsage()
     
-    #writer = cv2.VideoWriter('CubeProjections.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
+    global writer
+    writer = cv2.VideoWriter('Cube_Projection.avi', cv.CV_FOURCC('D','I','V','3'), 5.0, (W,H), True)
+    
     while(isSequenceOK):
         OriginalImage=copy(image)
      
@@ -402,11 +578,13 @@ def run(speed,video):
             update(OriginalImage)   
              
         if inputKey == ord('x') or inputKey == ord('X'):
-            global method
-            if method == 1:     
-                method = 2;                
+            global methodNo
+            if methodNo == 1:     
+                methodNo = 2
+                currentMethod = P2_method2                
             else:
-                method = 1;
+                methodNo = 1
+                currentMethod = P2_method1
             update(OriginalImage)   
             
                 
@@ -419,10 +597,10 @@ def run(speed,video):
             print "recording..." if record else "stopped recording"
            
         if (speed>0):
-            update(image, None, record)
+            update(image, record)
             image, isSequenceOK = getImageSequence(capture,speed)
 
-    #writer.release()
+    writer.release()
 
 
 def firstPart():
@@ -480,7 +658,7 @@ def secondPart():
 
 '''-------variables------'''
 global cameraMatrix
-global P2_method1    
+global P2_method1
 global P2_method2
 global distortionCoeff
 global homographyPoints
@@ -490,9 +668,17 @@ global chessSquare_size
 global cubeDefined
 global Kt
 global imgPointsFirst
-global method
+global methodNo
+global writer
+###
+#
+#instead of having IF's every time we use method1|method2 ---> currentMethod holds P2_method1 or P2method_2
+#
+###
+global currentMethod
 global topFace,downFace,leftFace, rightFace,upFace
 global drawTopFace, drawDownFace, drawLeftFace, drawRightFace, drawUpFace
+global cameraCenter
     
 ProcessFrame=True
 Undistorting=True
@@ -503,18 +689,23 @@ ProjectPattern=True
 #debug=True
 Hdefined=False
 cubeDefined=False
-method = 2
+methodNo = 2
 
 tempSpeed=1
 frameNumber=0
 chessSquare_size=2
-       
+cameraCenter = [0,0,0]       
        
 drawTopFace = False
 drawDownFace = False
 drawLeftFace = False
 drawRightFace = False
 drawUpFace = False
+
+P2_method1 = np.zeros((3, 4))
+P2_method1[:, :3] = np.identity(3)
+P2_method2 = np.zeros((3, 4))
+P2_method2[:, :3] = np.identity(3)
 
 '''-------defining the cube------'''
      
