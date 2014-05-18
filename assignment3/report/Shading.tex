@@ -1,2 +1,63 @@
 \section{Shading}
-	In this section we apply a shading algorithm to the cube.\\
+In this section we describe the theory and implementation of the shading algorithm.
+
+\subsection{Parameters}
+
+When shading the cube we need a method with which to simulate light. The result of this calculation is the intensity of each pixel to which the object is rendered, and the parameters of the scene that influences the result are:
+\begin{itemize}
+	\item The intensity of the light source at the given point. This is determined by the type of light source (point light, spotlight, ambient light) its strength, and sometimes its position in space.
+	\item The position of the camera relative to the object. This is derived from the projection matrix. 
+	\item The normal of the surface being shaded, as a measure of the plane that tangents the object in the point being shaded. 
+\end{itemize}
+
+The light source is determined to be a point light, placed at the same point as the camera for simplicity.\\
+The camera position is derived from the projection matrix. If the projection matrix P is given as:
+\begin{equation}
+	P = (R|t)
+\end{equation}
+Where $R$ is the rotation matrix and $t$ the translation vector of the projection, the camera position $p_c$ is given as:
+\begin{equation}
+	p_c = -R^{-1} t
+\end{equation}
+When the camera center is identified, we calculate and display the distance between the camera center and the center of the world coordinate system. Recall that the world coordinates are determined by the calibration process by use of the chessboard pattern, such that one of the chessboard corners is the world origin. When calculating this distance, its value fluctuates between 70 and 90 along with the movement of the camera. The units of the world coordinate system is determined by the chessboard, in which the distance between corners is defined to have the value 2. In the physical space the chessboard has squares approximately 2cm across, so the unit of the world coordinate system should be approximately 1cm. A distance of 70-90cm to the camera is of a reasonable magnitude that this makes sense.\\
+The normal of the point being shaded can be determined in a number of ways. For now we will assume a simple method where the normal of the shaded point is assumed equal to the normal of the face the point lies in. This results in a shading true to the polygonal representation of forms we use.\\
+
+\subsection{Intensity formula}
+
+We employ a simplified light model called the Phong illumination model. This model simulates light in 3 different ways:
+\begin{itemize}
+	\item Ambient shading. This is a value that is independent of light direction and surface normals. This value is the same for all points, and simulates the "overall" light situation in the scene, allowing for universally lighter or darker settings to be defined.
+	\item Diffuse shading. This value takes into account the direction of the light and the surface normal. It shades surfaces turned directly towards the light brightly, and surfaces turned away from the light dimly. This shading is independent of camera position, and simulates light being scattered when it reaches a surfaces.
+	\item Specular shading. This is a value that is based on the direction of light, the surface normal and the position of the camera. It simulates part of the light hitting a point being reflected exactly in the way a perfect mirror would. This results in "highlights" on the object that are dependent on camera position.
+\end{itemize}
+The ambient shading $S_a$ is given by the formula:
+\begin{equation}
+	S_a = I_a * k_a
+\end{equation}
+Where $I_a$ is the ambient light intensity in the scene, and $k_a$ is the ambient surface value (the base intensity) of the surface. \\
+The diffuse shading $S_d$ is given by the formula:
+\begin{equation}
+	S_d = I_d * k_d * max(n \cdot l, 0)
+\end{equation}
+Where $I_d$ is the diffuse light intensity, $k_d$ is the diffuse surface value, $n$ is the surface normal and $l$ is the direction of the light. The added factor of the dot product between the normal and the light direction is proportional the the cosine of the angel between the normal and the light direction, thus shading surfaces at different angles differently. The \textsl{max()} operation is added as a cutoff to make every point that has an angle greater than $\pi/2$ between the normal and the light direction receive a shading of 0, thus casting every surface turning away from the light source in complete shadow. Here it becomes clear what the significance of the ambient shading is; without it surfaces not pointing towards the light source would receive no light at all. The ambient shading can thus be said to simulate the fact that even in a space with only 1 light source, light is being scattered and re-scattered between all surfaces, so that no surface is in complete darkness.\\
+The specular shading $S_s$ is given by the formula:
+\begin{equation}
+	S_s = I_s * k_s * max((r \cdot v) ^ a, 0)
+\end{equation}
+Where $I_s$ is the specular light intensity, $k_s$ is the specular surface value, $r$ is the reflection vector, and $v$ is the view vector. The reflection vector $r$ is defined as the light direction vector $l$ mirrored around the surface normal vector n. Thus $r$ is a vector such that:
+\begin{equation}
+	l \cdot n = r \cdot n
+\end{equation}
+The view vector $v$ is the vector from the point being shaded to the camera position. \\
+$a$ is an exponent determining the degree to which the specular highlights are scattered. \\
+Thus specular shading has its highest value in points where the angle between the reflection vector and the view vector is 0; that is, in the points where the camera is positioned along the reflection vector. This mirrors (pun fully intended) the way reflection appears in the real world. \\
+The way in which the illumination model is applied is dependant on the color space of the image. In a single-channel image, the method is simply applied as described. In a HVS-image, the method is applied only to the Value-channel, as this channel in which light and shadow is encoded. In a color space such as the RGB-space, the method is applied to each of the three channels. To achieve identical effect to that of the HVS-space shading, identical constants are used in each channel, but effects not achievable by HVS-shading can be achieved by altering the constants between channels. For instance, the light intensity can be varied to simulate colored light sources.
+
+\subsection{Implementation}
+
+For each face on the cube we need to shade, we go through the same basic steps as when projecting the texture onto the faces: we project the 3-dimensional points onto the 2-dimensional image using camera matrix achieved from the calibration process; we then estimate a homography that transform the corners of a square to these projected point, and use this homography to position the shading correctly over the cube. We apply a mask such that only the pixels within the square gets applied to the image, and use bilinear interpolation when stretching the image to fit the face. The square image we apply the homography transformation to is derived using the Phong illumination model as described uIt is dubbed the \textsl{shading matrix}, and its dimension (as it is a square) is dubbed the \textsl{shading resolution}\\
+The way in which we determine the normal of each point being shaded is significant. When first implementing the shading we simply use the normal of the face the point is lying on; this has the effect that every point on a face is shaded with the same normal.\\
+To achieve a more realistic shading we use a method of interpolation of normals. The normal of each vertex of the face is determined, as the interpolation between all faces the vertex is a part of. These vertex normals are then used to determine the normal of the point being shaded: the normal of the point is calculated by interpolating the vertex normals with weights equal to the proximity the point has to each normal. The result is a simulation of the polygon having rounded faces and edges.\\
+If a perfectly realistic shading was needed, this interpolation would be carried out to determine exactly one normal for each pixel that needed shading. Because we are using a simplified shading model in which a shading matrix is constructed and then projected onto the image, we instead interpolate one normal for each point in the shading matrix. The number of points being shaded is therefore the shading resolution squared. Because we are working on square faces exclusively, we can employ simple bilinear interpolation to determine the normals.\\
+
+It should be noted that since the shading matrix is being projected on top of the existing texture projection, the texture acts as the ambient light component, and this is therefore not incorporated into the calculation of the shading matrix. 
